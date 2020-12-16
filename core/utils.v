@@ -6,6 +6,7 @@ Import ListNotations.
 Section NonEmpty.
 	Variable T: Type.
 	Definition NonEmpty := { l: list T | l <> [] }.
+	Definition listOf(ne: NonEmpty) := proj1_sig ne.
 
 	Obligation Tactic := crush.
 	Program Definition NonEmpty_from_list(l: list T): option NonEmpty :=
