@@ -10,6 +10,7 @@ clean:
 	rm -f .*.d
 	rm -f Makefile*
 	rm -f .lia.cache
+	rm -f *.ml*
 	popd
 
 build:

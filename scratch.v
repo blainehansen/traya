@@ -1,3 +1,71 @@
+(*Theorem PathMatchesStream_hnmn:
+	forall path stream, path <> [] -> ~(PathMatchesStream path stream -> PathMatchesStream [] stream).
+Proof.
+	intros . unfold not in *. intros. apply H.  invert_PathMatchesStream.
+Qed.*)
+
+(*Theorem PathSameStartAs_nothing_smaller_than_empty:
+	forall smaller, ~(PathSameStartAs smaller []).
+Proof.
+	intros. unfold not, PathSameStartAs. intros. apply (PathMatchesStream_hnmn H). destruct smaller.
+- crush.
+-  intros.
+Qed.*)
+
+(*Theorem PathSameStartAs_path_not_empty:
+	forall path, ~(PathSameStartAs [] path).
+Proof.
+	intros. unfold PathSameStartAs. unfold not. intros.
+	destruct path.
+- destruct stream.
+	+
+	+ apply PathMatchesStream_path_not_empty with (stream := stream). apply H.
+-
+
+	apply PathMatchesStream_path_not_empty with (stream := stream). apply H.
+
+	destruct path.
+- apply PathMatchesStream_path_not_empty with (stream := []). apply H. contradiction.
+- apply PathMatchesStream_path_not_empty with (stream := stream). apply H0.
+
+Qed.*)
+
+(*Theorem matching_streams_never_match_against_empty:
+	forall A stream, A <> [] -> ~(PathMatchesStream A stream -> PathMatchesStream [] stream).
+Proof.
+	intros. unfold not. intros. destruct A.
+	- contradiction.
+	- apply PathMatchesStream_path_not_empty in H0. contradiction.  crush.
+	intros A. induction A.
+	- intros. unfold not. intros. crush. rewrite <- PathMatchesStream_path_not_empty.
+	-
+Qed.*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Definition ModifierMany (modifier: Modifier): Prop := modifier = Some Many /\ modifier = Some MaybeMany.
 Definition ModifierManyBool :=
 	{ModifierMany modifier} + {~(ModifierMany modifier)}.
