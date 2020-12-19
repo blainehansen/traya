@@ -7,40 +7,25 @@ Require String.
 Require Import Cpdt.CpdtTactics.
 Require Import PeanoNat Lt.
 
-Require Import core.utils.
-
-
-Inductive BaseModifier: Set :=
-	(*| Many*)
-	| Maybe
-	(*| MaybeMany*)
-.
-Definition Modifier := option BaseModifier.
-
-Definition ModifierOptional (modifier: Modifier): Prop := modifier = Some Maybe.
-Definition ModifierOptionalBool modifier :=
-	{ModifierOptional modifier} + {~(ModifierOptional modifier)}.
-Obligation Tactic := crush.
-Program Definition Modifier_optional modifier: ModifierOptionalBool modifier :=
-	match modifier with
-	| Some m => match m with
-		(*| Many => No*)
-		| Maybe => Yes
-		(*| MaybeMany => Yes*)
-		end
-	| None => No
-	end.
-
+(*Require Import core.utils.*)
 
 Definition TokenDefinition := String.string.
 Definition Token := String.string.
 
 Definition TokenMatches (def: TokenDefinition) (token: Token): Prop := def = token.
-Definition TokenMatchesBool def token :=
+Hint Unfold TokenMatches: core.
+(*Definition TokenMatchesBool def token :=
 	{TokenMatches def token} + {~(TokenMatches def token)}.
 Obligation Tactic := crush.
 Program Definition match_token def token: TokenMatchesBool def token :=
-	Reduce (String.string_dec def token).
+	Reduce (String.string_dec def token).*)
+
+Ltac simpl_TokenMatches :=
+	unfold TokenMatches in *; subst.
+
+Theorem TokenDefinition_match_same_then_same:
+	forall a b token, TokenMatches a token -> TokenMatches b token -> a = b.
+Proof. crush. Qed.
 
 
 Definition TokenPath := list TokenDefinition.
@@ -59,7 +44,10 @@ Hint Constructors PathMatchesStream: core.
 
 Ltac invert_PathMatchesStream :=
 	crush; repeat match goal with
-		| [ H : PathMatchesStream _ _ |- _ ] => solve [inversion H; clear H; crush]
+		| [ H : TokenMatches _ _ |- _ ] =>
+			simpl_TokenMatches; crush
+		| [ H : PathMatchesStream _ _ |- _ ] =>
+			solve [inversion H; clear H; crush]
 	end.
 
 Theorem PathMatchesStream_path_not_empty:
@@ -78,14 +66,134 @@ Proof. invert_PathMatchesStream. Qed.
 Hint Resolve PathMatchesStream_length_non_zero: core.
 
 Theorem PathMatchesStream_same_if_match_same:
-	forall a b stream, PathMatchesStream a stream -> PathMatchesStream b stream -> a = b.
+	forall a b stream,
+		PathMatchesStream a stream
+		-> PathMatchesStream b stream
+		-> a = b.
 Proof.
-	intros. inversion H; subst; clear H.
-- inversion H0; subst; clear H0; crush. apply PathMatchesStream_stream_not_empty in H5; crush.
-- inversion H0; subst; clear H0; crush. apply PathMatchesStream_stream_not_empty in H2; crush.
-induction stream0.
-+ apply PathMatchesStream_stream_not_empty in H2; crush.
-+ apply IHstream0.
+
+intros a b stream.
+generalize dependent b.
+generalize dependent a.
+
+(*induction stream as [| tok stream IHstream].*)
+destruct stream as [| tok stream'] eqn:SE.
+
+- invert_PathMatchesStream.
+-
+intros a b.
+destruct a as [| atok a'] eqn:AE; destruct b as [| btok b'] eqn:BE.
+
++ invert_PathMatchesStream.
++ invert_PathMatchesStream.
++ invert_PathMatchesStream.
++
+intros Ha Hb.
+induction Ha; induction Hb.
+++
+
+
+++
+++
+++
+
+
+
+
+injection.
+
+apply IHstream.
+
+
+++
+
+
++
+
+apply IHstream.
++
+
+
++
+
+
+intros a; induction a as [| atok a IHa]; intros b; induction b as [| btok b IHb].
+
+- invert_PathMatchesStream.
+- invert_PathMatchesStream.
+- invert_PathMatchesStream.
+
+-
+induction stream as [| tok stream IHstream].
+
++ invert_PathMatchesStream.
+
+
++
+intros Ha Hb.
+
+apply IHa.
+
+(*intros a b stream Ha.
+generalize dependent b.
+induction Ha.
+-
+intros b Hb.
+unfold TokenMatches in *.
+induction Hb.
++
+
+-
+
+
+
+
+intros a.
+
+induction a as [| atok a IHa].
+
+- invert_PathMatchesStream.
+
+-
+intros b.
+induction b as [| btok b IHb].
+-- invert_PathMatchesStream.
+--
+intros stream.
+induction stream as [| tok stream IHstream].
++ invert_PathMatchesStream.
++
+intros Ha.
+induction Ha; intros Hb; induction Hb.
+++ apply IHb.
+++ invert_PathMatchesStream.
+++
+inversion Ha; clear Ha; inversion Hb; clear Hb; invert_PathMatchesStream.
+++
+apply IHa.
+++
+*)
+
+(*intros a b stream.
+generalize dependent b.
+generalize dependent a.
+induction stream as [| tok stream IHstream].
+- invert_PathMatchesStream.
+-
+intros a.
+induction a as [| atok a IHa].
+-- invert_PathMatchesStream.
+--
+intros b.
+induction b as [| btok b IHb].
+++ invert_PathMatchesStream.
+++
+intros Ha Hb.
+
+induction Ha; induction Hb; simpl_TokenMatches.
+crush.
+invert_PathMatchesStream.*)
+
 Qed.
 
 
@@ -133,6 +241,28 @@ Definition PathSubsumedBy (A B: TokenPath): Prop := PathSameStartAs A B /\ ~(Pat
 
 
 
+
+
+Inductive BaseModifier: Set :=
+	(*| Many*)
+	| Maybe
+	(*| MaybeMany*)
+.
+Definition Modifier := option BaseModifier.
+
+Definition ModifierOptional (modifier: Modifier): Prop := modifier = Some Maybe.
+Definition ModifierOptionalBool modifier :=
+	{ModifierOptional modifier} + {~(ModifierOptional modifier)}.
+Obligation Tactic := crush.
+Program Definition Modifier_optional modifier: ModifierOptionalBool modifier :=
+	match modifier with
+	| Some m => match m with
+		(*| Many => No*)
+		| Maybe => Yes
+		(*| MaybeMany => Yes*)
+		end
+	| None => No
+	end.
 
 Inductive Node: Type :=
 	| consume (modifier: Modifier) (defs: NonEmpty TokenDefinition)
