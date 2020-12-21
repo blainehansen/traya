@@ -1,3 +1,27 @@
+(*
+Fixpoint ListsCorrespondComp {T U: Type} (C: T -> U -> Prop) (lt: list T) (lu: list U): Prop :=
+	match lt, lu with
+	| [], [] => True
+	(*| [t], [u] => C t u*)
+	| (t :: lt'), (u :: lu') => C t u /\ ListsCorrespondComp C lt' lu'
+	| _, _ => False
+	end.
+Hint Unfold ListsCorrespondComp: core.
+
+Theorem ListsCorrespond_equivalent:
+	forall T U C lt lu, @ListsCorrespond T U C lt lu <-> @ListsCorrespondComp T U C lt lu.
+Proof.
+	split;
+	generalize dependent lu;
+	induction lt; intros lu H; induction lu; inversion H; crush.
+Qed.
+Hint Rewrite ListsCorrespond_equivalent: core.
+*)
+
+
+
+
+
 (*Theorem PathMatchesStream_hnmn:
 	forall path stream, path <> [] -> ~(PathMatchesStream path stream -> PathMatchesStream [] stream).
 Proof.

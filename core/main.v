@@ -7,47 +7,127 @@ Require String.
 Require Import Cpdt.CpdtTactics.
 Require Import PeanoNat Lt.
 
-(*Require Import core.utils.*)
+Require Import core.utils.
+
+Section ListsCorrespond.
+	Variable T U: Type.
+	Variable C: T -> U -> Prop.
+
+	Inductive ListsCorrespond: list T -> list U -> Prop :=
+		| ListsCorrespond_nil: ListsCorrespond (@nil T) (@nil U)
+		(*| ListsCorrespond_base: forall (t: T) (u: U), C t u -> ListsCorrespond [t] [u]*)
+		| ListsCorrespond_cons: forall (t: T) (u: U) lt lu,
+			C t u -> ListsCorrespond lt lu -> ListsCorrespond (t :: lt) (u :: lu)
+	.
+	Hint Constructors ListsCorrespond: core.
+
+	Definition ListsCorrespondBool lt lu :=
+		{ListsCorrespond lt lu} + {~(ListsCorrespond lt lu)}.
+	(*Obligation Tactic := crush.*)
+	(*Fixpoint lists_correspond
+		(corresponder: forall t u, {C t u} + {~(C t u)})
+		lt lu
+	: ListsCorrespondBool lt lu :=
+		match lt, lu with
+		| [], [] => Yes
+		| (t :: lt'), (u :: lu') => if corresponder t u
+			then Reduce (lists_correspond corresponder lt' lu')
+			else No
+		| _, _ => No
+		end.*)
+
+	Theorem ListsCorrespond_same_length:
+		forall lt lu, ListsCorrespond lt lu -> length lt = length lu.
+	Proof.
+		intros lt.
+		induction lt; intros lu H; induction lu; inversion H; crush.
+	Qed.
+
+End ListsCorrespond.
+
+Theorem ListsCorrespond_transfer:
+	forall T CA CB,
+		(forall a b, CA a b <-> CB a b) ->
+		forall lta ltb, @ListsCorrespond T T CA lta ltb <-> @ListsCorrespond T T CB lta ltb.
+Proof.
+split; generalize dependent ltb;
+induction lta; intros ltb; induction ltb;
+intros HCA; try apply ListsCorrespond_nil; try inversion HCA; subst;
+
+apply ListsCorrespond_cons; crush.
++ apply H; crush.
+Qed.
+
 
 Definition TokenDefinition := String.string.
 Definition Token := String.string.
 
 Definition TokenMatches (def: TokenDefinition) (token: Token): Prop := def = token.
 Hint Unfold TokenMatches: core.
-(*Definition TokenMatchesBool def token :=
+Definition TokenMatchesBool def token :=
 	{TokenMatches def token} + {~(TokenMatches def token)}.
 Obligation Tactic := crush.
 Program Definition match_token def token: TokenMatchesBool def token :=
-	Reduce (String.string_dec def token).*)
+	Reduce (String.string_dec def token).
 
-Ltac simpl_TokenMatches :=
-	unfold TokenMatches in *; subst.
+Definition TokenDefinitionsSame (a b: TokenDefinition): Prop := a = b.
+Hint Unfold TokenDefinitionsSame: core.
+Definition TokenDefinitionsEquivalent (a b: TokenDefinition): Prop :=
+	forall token, TokenMatches a token <-> TokenMatches b token.
+Hint Unfold TokenDefinitionsEquivalent: core.
 
-Theorem TokenDefinition_match_same_then_same:
-	forall a b token, TokenMatches a token -> TokenMatches b token -> a = b.
-Proof. crush. Qed.
+Ltac token_unfold :=
+	unfold TokenDefinitionsEquivalent in *;
+	unfold TokenDefinitionsSame in *;
+	unfold TokenMatches in *.
+
+Theorem TokenDefinitionsSameEquivalent:
+	forall a b, TokenDefinitionsSame a b <-> TokenDefinitionsEquivalent a b.
+Proof. split; token_unfold; crush. Qed.
+Hint Rewrite TokenDefinitionsSameEquivalent: core.
 
 
 Definition TokenPath := list TokenDefinition.
 Definition TokenStream := list Token.
 
-Inductive PathMatchesStream: TokenPath -> TokenStream -> Prop :=
-	| PathMatchesStream_base: forall def token,
-		TokenMatches def token
-		-> PathMatchesStream [def] [token]
-	| PathMatchesStream_append: forall def token path stream,
-		TokenMatches def token
-		-> PathMatchesStream path stream
-		-> PathMatchesStream (def :: path) (token :: stream)
-.
-Hint Constructors PathMatchesStream: core.
+Definition TokenPathsSame a b :=
+	@ListsCorrespond TokenDefinition TokenDefinition TokenDefinitionsSame a b.
+Hint Unfold TokenPathsSame: core.
+Definition TokenPathsEquivalent a b :=
+	@ListsCorrespond TokenDefinition TokenDefinition TokenDefinitionsEquivalent a b.
+Hint Unfold TokenPathsEquivalent: core.
 
+Ltac path_unfold :=
+	unfold TokenPathsEquivalent in *;
+	unfold TokenPathsSame in *;
+	token_unfold.
+
+
+Theorem TokenPathsSameEquivalent:
+	forall a b, TokenPathsSame a b <-> TokenPathsEquivalent a b.
+Proof.
+split; generalize dependent b; induction a; induction b;
+path_unfold; intros H; try apply ListsCorrespond_nil; try inversion H.
+
+-
+-
+
+
+Qed.
+Hint Rewrite TokenPathsSameEquivalent: core.
+
+Definition PathMatchesStream path stream :=
+	@ListsCorrespond TokenDefinition Token TokenMatches path stream /\ path <> [].
+Hint Unfold PathMatchesStream: core.
+
+		(*| [ H : TokenMatches _ _ |- _ ] =>*)
+			(*token_unfold; crush*)
 Ltac invert_PathMatchesStream :=
 	crush; repeat match goal with
-		| [ H : TokenMatches _ _ |- _ ] =>
-			simpl_TokenMatches; crush
 		| [ H : PathMatchesStream _ _ |- _ ] =>
-			solve [inversion H; clear H; crush]
+			inversion H; clear H; crush
+		| [ H : @ListsCorrespond _ _ _ _ _ |- _ ] =>
+			inversion H; clear H; crush
 	end.
 
 Theorem PathMatchesStream_path_not_empty:
@@ -57,13 +137,25 @@ Hint Resolve PathMatchesStream_path_not_empty: core.
 
 Theorem PathMatchesStream_stream_not_empty:
 	forall path, ~(PathMatchesStream path []).
-Proof. invert_PathMatchesStream. Qed.
+Proof. destruct path; invert_PathMatchesStream. Qed.
 Hint Resolve PathMatchesStream_stream_not_empty: core.
 
+Theorem PathMatchesStream_same_length:
+	forall path stream, PathMatchesStream path stream -> length path = length stream.
+Proof. intros ? ? [->%ListsCorrespond_same_length]; easy. Qed.
+
 Theorem PathMatchesStream_length_non_zero:
-	forall path stream, PathMatchesStream path stream -> 0 < (length path) /\ 0 < (length stream).
+	forall path stream, PathMatchesStream path stream -> 0 <> (length path) /\ 0 <> (length stream).
 Proof. invert_PathMatchesStream. Qed.
 Hint Resolve PathMatchesStream_length_non_zero: core.
+
+
+
+
+
+Theorem PathMatchesStream_same_if_match_same_aux :
+	forall path stream, PathMatchesStream path stream -> path = stream.
+Proof. intros ? ? H. induction H; crush. Qed.
 
 Theorem PathMatchesStream_same_if_match_same:
 	forall a b stream,
@@ -71,129 +163,7 @@ Theorem PathMatchesStream_same_if_match_same:
 		-> PathMatchesStream b stream
 		-> a = b.
 Proof.
-
-intros a b stream.
-generalize dependent b.
-generalize dependent a.
-
-(*induction stream as [| tok stream IHstream].*)
-destruct stream as [| tok stream'] eqn:SE.
-
-- invert_PathMatchesStream.
--
-intros a b.
-destruct a as [| atok a'] eqn:AE; destruct b as [| btok b'] eqn:BE.
-
-+ invert_PathMatchesStream.
-+ invert_PathMatchesStream.
-+ invert_PathMatchesStream.
-+
-intros Ha Hb.
-induction Ha; induction Hb.
-++
-
-
-++
-++
-++
-
-
-
-
-injection.
-
-apply IHstream.
-
-
-++
-
-
-+
-
-apply IHstream.
-+
-
-
-+
-
-
-intros a; induction a as [| atok a IHa]; intros b; induction b as [| btok b IHb].
-
-- invert_PathMatchesStream.
-- invert_PathMatchesStream.
-- invert_PathMatchesStream.
-
--
-induction stream as [| tok stream IHstream].
-
-+ invert_PathMatchesStream.
-
-
-+
-intros Ha Hb.
-
-apply IHa.
-
-(*intros a b stream Ha.
-generalize dependent b.
-induction Ha.
--
-intros b Hb.
-unfold TokenMatches in *.
-induction Hb.
-+
-
--
-
-
-
-
-intros a.
-
-induction a as [| atok a IHa].
-
-- invert_PathMatchesStream.
-
--
-intros b.
-induction b as [| btok b IHb].
--- invert_PathMatchesStream.
---
-intros stream.
-induction stream as [| tok stream IHstream].
-+ invert_PathMatchesStream.
-+
-intros Ha.
-induction Ha; intros Hb; induction Hb.
-++ apply IHb.
-++ invert_PathMatchesStream.
-++
-inversion Ha; clear Ha; inversion Hb; clear Hb; invert_PathMatchesStream.
-++
-apply IHa.
-++
-*)
-
-(*intros a b stream.
-generalize dependent b.
-generalize dependent a.
-induction stream as [| tok stream IHstream].
-- invert_PathMatchesStream.
--
-intros a.
-induction a as [| atok a IHa].
--- invert_PathMatchesStream.
---
-intros b.
-induction b as [| btok b IHb].
-++ invert_PathMatchesStream.
-++
-intros Ha Hb.
-
-induction Ha; induction Hb; simpl_TokenMatches.
-crush.
-invert_PathMatchesStream.*)
-
+	intros ? ? ? ->%PathMatchesStream_same_if_match_same_aux ->%PathMatchesStream_same_if_match_same_aux.
 Qed.
 
 
