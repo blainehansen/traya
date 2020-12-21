@@ -55,7 +55,7 @@ induction lta; intros ltb; induction ltb;
 intros HCA; try apply ListsCorrespond_nil; try inversion HCA; subst;
 
 apply ListsCorrespond_cons; crush.
-+ apply H; crush.
+apply H; crush.
 Qed.
 
 
@@ -106,13 +106,7 @@ Ltac path_unfold :=
 Theorem TokenPathsSameEquivalent:
 	forall a b, TokenPathsSame a b <-> TokenPathsEquivalent a b.
 Proof.
-split; generalize dependent b; induction a; induction b;
-path_unfold; intros H; try apply ListsCorrespond_nil; try inversion H.
-
--
--
-
-
+	split; apply (@ListsCorrespond_transfer TokenDefinition TokenDefinitionsSame TokenDefinitionsEquivalent TokenDefinitionsSameEquivalent).
 Qed.
 Hint Rewrite TokenPathsSameEquivalent: core.
 
