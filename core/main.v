@@ -9,32 +9,62 @@ Require Import PeanoNat Lt.
 
 Require Import core.utils.
 
+(*Definition ListsCorrespondBool lt lu :=
+	{ListsCorrespond lt lu} + {~(ListsCorrespond lt lu)}.
+Obligation Tactic := crush.
+Fixpoint lists_correspond
+	(corresponder: forall t u, {C t u} + {~(C t u)})
+	lt lu
+: ListsCorrespondBool lt lu :=
+	match lt, lu with
+	| [], [] => Yes
+	| (t :: lt'), (u :: lu') => if corresponder t u
+		then Reduce (lists_correspond corresponder lt' lu')
+		else No
+	| _, _ => No
+	end.*)
+
+Theorem  : .
+Proof.
+
+Qed.
+
+
+Theorem skipn_length_smaller_leaves_not_nil:
+	forall T (bigger smaller: list T),
+		length smaller < length bigger
+		-> skipn (length smaller) bigger <> [].
+Proof.
+intros ? bigger; induction bigger; intros smaller; induction smaller; crush.
+	assert (Y: forall l n, n < length l -> skipn n l <> []).
+
+Qed.
+
+(*
+skipn_O: forall (l), skipn 0 l = l
+skipn_all: forall (l), skipn (length l) l = []
+skipn_nil: forall (n), skipn n ([]) = []
+skipn_length: forall (n) (l), length (skipn n l) = length l - n
+skipn_cons: forall (n) (a: A) (l), skipn (S n) (a :: l) = skipn n l
+skipn_all2: forall [n] (l), length l <= n -> skipn n l = []
+skipn_app: forall (n) (l1 l2), skipn n (l1 ++ l2) = skipn n l1 ++ skipn (n - length l1) l2
+*)
+
+
 Section ListsCorrespond.
 	Variable T U: Type.
 	Variable C: T -> U -> Prop.
 
 	Inductive ListsCorrespond: list T -> list U -> Prop :=
-		(*| ListsCorrespond_nil: ListsCorrespond (@nil T) (@nil U)*)
-		| ListsCorrespond_nil: forall lu, ListsCorrespond (@nil T) lu
+		| ListsCorrespond_nil: ListsCorrespond (@nil T) (@nil U)
 		| ListsCorrespond_cons: forall (t: T) (u: U) lt lu,
 			C t u -> ListsCorrespond lt lu -> ListsCorrespond (t :: lt) (u :: lu)
 	.
 	Hint Constructors ListsCorrespond: core.
 
-	Definition ListsCorrespondBool lt lu :=
-		{ListsCorrespond lt lu} + {~(ListsCorrespond lt lu)}.
-	(*Obligation Tactic := crush.*)
-	(*Fixpoint lists_correspond
-		(corresponder: forall t u, {C t u} + {~(C t u)})
-		lt lu
-	: ListsCorrespondBool lt lu :=
-		match lt, lu with
-		| [], [] => Yes
-		| (t :: lt'), (u :: lu') => if corresponder t u
-			then Reduce (lists_correspond corresponder lt' lu')
-			else No
-		| _, _ => No
-		end.*)
+	(*Definition ListsMatch t_list u_list :=
+		exists u_list_head u_list_tail,
+			u_list = u_list_head ++ u_list_tail /\ ListsCorrespond t_list u_list_head.*)
 
 	Theorem ListsCorrespond_append:
 		forall lt_one lu_one lt_two lu_two,
@@ -64,12 +94,89 @@ Section ListsCorrespond.
 		induction smaller; destruct extension; crush.
 	Qed.
 
+	Theorem ListsCorrespond_extends_corresponds_longer:
+		forall bigger smaller smaller_correspond bigger_correspond,
+			ListsCorrespond_extends bigger smaller
+			-> ListsCorrespond smaller smaller_correspond
+			-> ListsCorrespond bigger bigger_correspond
+			-> length smaller_correspond < length bigger_correspond.
+	Proof.
+intros ? ? ? ? [extension []] ? ?.
+subst.
+
+
+induction H1; induction H2; crush.
+
+	Qed.
+
+	Theorem ListsCorrespond_extends_corresponds_more:
+		forall bigger smaller smaller_correspond bigger_correspond,
+			ListsCorrespond_extends bigger smaller
+			-> ListsCorrespond smaller smaller_correspond
+			-> ListsCorrespond bigger bigger_correspond
+			-> exists extension_correspond,
+				bigger_correspond = smaller_correspond ++ extension_correspond.
+	Proof.
+intros ? ? ? ? [extension [Hnil Heq]] Hs Hb.
+exists (skipn (length smaller_correspond) bigger_correspond).
+subst.
+induction H1; induction H2; induction extension.
+-
+crush.
+-
+crush.
+-
+crush.
+-
+crush.
+
+-
+crush.
+
+-
+
+
+-
+-
+-
+-
+-
+
+
+
+
+
+simpl in *.
+
+(*
+skipn_O: forall [A : Type] (l : list A), skipn 0 l = l
+skipn_all: forall [A : Type] (l : list A), skipn (length l) l = []
+skipn_nil: forall (A : Type) (n : nat), skipn n ([] : list A) = []
+skipn_length: forall [A : Type] (n : nat) (l : list A), length (skipn n l) = length l - n
+skipn_cons: forall [A : Type] (n : nat) (a : A) (l : list A), skipn (S n) (a :: l) = skipn n l
+skipn_all2: forall [A : Type] [n : nat] (l : list A), length l <= n -> skipn n l = []
+skipn_app: forall [A : Type] (n : nat) (l1 l2 : list A), skipn n (l1 ++ l2) = skipn n l1 ++ skipn (n - length l1) l2
+*)
+
+
+apply ListsCorrespond_append; crush.
+-
+
+
+apply (ListsCorrespond_append smaller smaller_correspond extension ?X).
+rewrite <- (ListsCorrespond_append smaller smaller_correspond extension ?X).
+
+crush.
+
+
+	Qed.
+
 	Definition ListsCorrespond_contains bigger smaller :=
 		(forall lu, ListsCorrespond smaller lu -> ListsCorrespond bigger lu)
 		/\ exists lu, ListsCorrespond bigger lu /\ ~(ListsCorrespond smaller lu).
 	Hint Unfold ListsCorrespond_contains: core.
 
-	Theorem ListsCorrespond_extends_contains_equivalent:
+	Theorem ListsCorrespond_extends_equivalent_contains:
 		forall smaller bigger,
 			ListsCorrespond_extends smaller bigger <-> ListsCorrespond_contains smaller bigger.
 	Proof.
@@ -80,26 +187,6 @@ split.
 intros [extension []].
 subst.
 split.
-+
-intros.
-
-+
-
--
-
-
-
-	Qed.
-
-	(*Theorem ListsCorrespond_same:
-		forall a b, a = b -> ListsCorrespond_less_or_same a b.
-	Proof. crush. Qed.*)
-
-	Theorem ListsCorrespond_less_or_same_exists_extension:
-		forall smaller bigger, ListsCorrespond_less_or_same smaller bigger
-			-> exists .
-	Proof.
-
 	Qed.
 
 End ListsCorrespond.
