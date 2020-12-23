@@ -14,8 +14,8 @@ Section ListsCorrespond.
 	Variable C: T -> U -> Prop.
 
 	Inductive ListsCorrespond: list T -> list U -> Prop :=
-		| ListsCorrespond_nil: ListsCorrespond (@nil T) (@nil U)
-		(*| ListsCorrespond_base: forall (t: T) (u: U), C t u -> ListsCorrespond [t] [u]*)
+		(*| ListsCorrespond_nil: ListsCorrespond (@nil T) (@nil U)*)
+		| ListsCorrespond_nil: forall lu, ListsCorrespond (@nil T) lu
 		| ListsCorrespond_cons: forall (t: T) (u: U) lt lu,
 			C t u -> ListsCorrespond lt lu -> ListsCorrespond (t :: lt) (u :: lu)
 	.
@@ -36,11 +36,70 @@ Section ListsCorrespond.
 		| _, _ => No
 		end.*)
 
+	Theorem ListsCorrespond_append:
+		forall lt_one lu_one lt_two lu_two,
+			ListsCorrespond lt_one lu_one
+			-> ListsCorrespond lt_two lu_two
+			-> ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two).
+	Proof.
+		Hint Rewrite -> app_nil_r.
+		intros ? ? ? ? H_one H_two; induction H_one; induction H_two; crush.
+	Qed.
+
 	Theorem ListsCorrespond_same_length:
 		forall lt lu, ListsCorrespond lt lu -> length lt = length lu.
 	Proof.
-		intros lt.
-		induction lt; intros lu H; induction lu; inversion H; crush.
+		intros ? ? H; induction H; crush.
+	Qed.
+
+	Definition ListsCorrespond_extends bigger smaller :=
+		exists extension: list T, extension <> [] /\ bigger = smaller ++ extension.
+	Hint Unfold ListsCorrespond_extends: core.
+
+	Theorem ListsCorrespond_extends_longer:
+		forall bigger smaller, ListsCorrespond_extends bigger smaller
+			-> length smaller < length bigger.
+	Proof.
+		intros ? ? [extension []]; subst;
+		induction smaller; destruct extension; crush.
+	Qed.
+
+	Definition ListsCorrespond_contains bigger smaller :=
+		(forall lu, ListsCorrespond smaller lu -> ListsCorrespond bigger lu)
+		/\ exists lu, ListsCorrespond bigger lu /\ ~(ListsCorrespond smaller lu).
+	Hint Unfold ListsCorrespond_contains: core.
+
+	Theorem ListsCorrespond_extends_contains_equivalent:
+		forall smaller bigger,
+			ListsCorrespond_extends smaller bigger <-> ListsCorrespond_contains smaller bigger.
+	Proof.
+		unfold ListsCorrespond_extends in *; unfold ListsCorrespond_contains in *.
+split.
+
+-
+intros [extension []].
+subst.
+split.
++
+intros.
+
++
+
+-
+
+
+
+	Qed.
+
+	(*Theorem ListsCorrespond_same:
+		forall a b, a = b -> ListsCorrespond_less_or_same a b.
+	Proof. crush. Qed.*)
+
+	Theorem ListsCorrespond_less_or_same_exists_extension:
+		forall smaller bigger, ListsCorrespond_less_or_same smaller bigger
+			-> exists .
+	Proof.
+
 	Qed.
 
 End ListsCorrespond.
