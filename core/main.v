@@ -24,21 +24,6 @@ Fixpoint lists_correspond
 	| _, _ => No
 	end.*)
 
-Theorem  : .
-Proof.
-
-Qed.
-
-
-Theorem skipn_length_smaller_leaves_not_nil:
-	forall T (bigger smaller: list T),
-		length smaller < length bigger
-		-> skipn (length smaller) bigger <> [].
-Proof.
-intros ? bigger; induction bigger; intros smaller; induction smaller; crush.
-	assert (Y: forall l n, n < length l -> skipn n l <> []).
-
-Qed.
 
 (*
 skipn_O: forall (l), skipn 0 l = l
@@ -49,6 +34,23 @@ skipn_cons: forall (n) (a: A) (l), skipn (S n) (a :: l) = skipn n l
 skipn_all2: forall [n] (l), length l <= n -> skipn n l = []
 skipn_app: forall (n) (l1 l2), skipn n (l1 ++ l2) = skipn n l1 ++ skipn (n - length l1) l2
 *)
+
+Theorem  skipn_n_smaller_leaves_not_nil:
+	forall T n (l: list T), n < length l -> skipn n l <> [].
+Proof.
+	intros ? n; induction n; intros l; induction l; intros;
+	try solve [crush];
+	solve [simpl in *; apply IHn; crush].
+Qed.
+
+
+Theorem skipn_length_smaller_leaves_not_nil:
+	forall T (bigger smaller: list T),
+		length smaller < length bigger
+		-> skipn (length smaller) bigger <> [].
+Proof.
+	intros; apply skipn_n_smaller_leaves_not_nil; crush.
+Qed.
 
 
 Section ListsCorrespond.
@@ -62,9 +64,42 @@ Section ListsCorrespond.
 	.
 	Hint Constructors ListsCorrespond: core.
 
-	(*Definition ListsMatch t_list u_list :=
-		exists u_list_head u_list_tail,
-			u_list = u_list_head ++ u_list_tail /\ ListsCorrespond t_list u_list_head.*)
+	Inductive ListsMatch: list T -> list U -> Prop :=
+		| ListsMatch_nil: forall lu,  ListsMatch (@nil T) lu
+		| ListsMatch_cons: forall (t: T) (u: U) lt lu,
+			C t u -> ListsMatch lt lu -> ListsMatch (t :: lt) (u :: lu)
+	.
+	Hint Constructors ListsMatch: core.
+
+	Theorem ListsCorrespond_ListsMatch:
+		forall lt lu, ListsCorrespond lt lu -> ListsMatch lt lu.
+	Proof.
+		intros ? ? H; induction H; crush.
+	Qed.
+	Hint Resolve ListsCorrespond_ListsMatch: core.
+
+	Theorem ListsMatch_same_length_ListsCorrespond:
+		forall lt lu,
+			ListsMatch lt lu
+			-> length lt = length lu
+			-> ListsCorrespond lt lu.
+	Proof.
+intros ? ? H Hlen.
+induction H.
+- destruct lu.
+	+ crush.
+	+ discriminate Hlen.
+- crush.
+	Qed.
+
+	Theorem ListsMatch_portion_ListsCorrespond:
+		forall lt lu,
+			ListsMatch lt lu
+			-> exists lu_corr lu_ext,
+				lu = lu_corr ++ lu_ext /\ ListsCorrespond lt lu_corr.
+	Proof.
+
+	Qed.
 
 	Theorem ListsCorrespond_append:
 		forall lt_one lu_one lt_two lu_two,
@@ -80,6 +115,42 @@ Section ListsCorrespond.
 		forall lt lu, ListsCorrespond lt lu -> length lt = length lu.
 	Proof.
 		intros ? ? H; induction H; crush.
+	Qed.
+
+	Theorem ListsCorrespond_skip:
+		forall lt lu n,
+			ListsCorrespond lt lu
+			-> ListsCorrespond (skipn n lt) (skipn n lu).
+	Proof.
+intros ? ? ? H.
+generalize dependent n.
+induction H.
+
+
+induction n;
+induction H; crush.
+Hint Rewrite skipn_nil.
+destruct lt; destruct lu; simpl in *.
+-
+crush.
+-
+inversion H0.
+-
+inversion H0.
+-
+
+
+crush.
+-
+crush.
+
+destruct lt; destruct lu; inversion H.
++
+simpl. apply ListsCorrespond_nil.
++
+simpl.
+crush.
+
 	Qed.
 
 	Definition ListsCorrespond_extends bigger smaller :=
@@ -101,12 +172,11 @@ Section ListsCorrespond.
 			-> ListsCorrespond bigger bigger_correspond
 			-> length smaller_correspond < length bigger_correspond.
 	Proof.
-intros ? ? ? ? [extension []] ? ?.
-subst.
-
-
-induction H1; induction H2; crush.
-
+		intros ? ? ? ? extends SC BC;
+		rewrite <- (ListsCorrespond_same_length SC);
+		rewrite <- (ListsCorrespond_same_length BC);
+		apply ListsCorrespond_extends_longer;
+		exact extends.
 	Qed.
 
 	Theorem ListsCorrespond_extends_corresponds_more:
@@ -117,10 +187,63 @@ induction H1; induction H2; crush.
 			-> exists extension_correspond,
 				bigger_correspond = smaller_correspond ++ extension_correspond.
 	Proof.
-intros ? ? ? ? [extension [Hnil Heq]] Hs Hb.
+
+(*this isn't true, since you're relating bigger_correspond *by equality* rather than correspondence with the relation C*)
+
+intros bigger; induction bigger as [| b bigger'];
+intros smaller; induction smaller as [| s smaller'];
+intros ? ? [extension [Hnil Heq]] Hs Hb;
+exists (skipn (length smaller_correspond) bigger_correspond);
+induction extension as [| e extension']; inversion Hs; inversion Hb.
+
+-
+crush.
+-
+crush.
+-
+crush.
+-
+crush.
+-
+crush.
+-
+crush.
+-
+crush.
+-
+simpl in *.
+subst.
+
+
+assert (Hlen: length smaller < length bigger)
+	by apply (ListsCorrespond_extends_longer extends);
+assert (Hclen: length smaller_correspond < length bigger_correspond)
+	by apply (ListsCorrespond_extends_corresponds_longer extends Hs Hb);
+
+
+simpl in *.
+subst.
+
+
+
+
+
+
+
+
+intros ? ? ? ? extends Hs Hb.
+assert (Hlen: length smaller < length bigger)
+	by apply (ListsCorrespond_extends_longer extends).
+assert (Hclen: length smaller_correspond < length bigger_correspond)
+	by apply (ListsCorrespond_extends_corresponds_longer extends Hs Hb).
+destruct extends as [extension [Hnil Heq]].
 exists (skipn (length smaller_correspond) bigger_correspond).
 subst.
-induction H1; induction H2; induction extension.
+
+
+
+
+induction Hs; induction Hb; induction extension.
 -
 crush.
 -
@@ -129,44 +252,23 @@ crush.
 crush.
 -
 crush.
-
 -
 crush.
-
 -
-
-
+inversion H.
 -
+crush.
 -
--
--
--
+apply IHextension.
++
 
++
 
-
++
 
 
 simpl in *.
 
-(*
-skipn_O: forall [A : Type] (l : list A), skipn 0 l = l
-skipn_all: forall [A : Type] (l : list A), skipn (length l) l = []
-skipn_nil: forall (A : Type) (n : nat), skipn n ([] : list A) = []
-skipn_length: forall [A : Type] (n : nat) (l : list A), length (skipn n l) = length l - n
-skipn_cons: forall [A : Type] (n : nat) (a : A) (l : list A), skipn (S n) (a :: l) = skipn n l
-skipn_all2: forall [A : Type] [n : nat] (l : list A), length l <= n -> skipn n l = []
-skipn_app: forall [A : Type] (n : nat) (l1 l2 : list A), skipn n (l1 ++ l2) = skipn n l1 ++ skipn (n - length l1) l2
-*)
-
-
-apply ListsCorrespond_append; crush.
--
-
-
-apply (ListsCorrespond_append smaller smaller_correspond extension ?X).
-rewrite <- (ListsCorrespond_append smaller smaller_correspond extension ?X).
-
-crush.
 
 
 	Qed.
