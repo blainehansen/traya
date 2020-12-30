@@ -33,6 +33,26 @@ skipn_length: forall (n) (l), length (skipn n l) = length l - n
 skipn_cons: forall (n) (a: A) (l), skipn (S n) (a :: l) = skipn n l
 skipn_all2: forall [n] (l), length l <= n -> skipn n l = []
 skipn_app: forall (n) (l1 l2), skipn n (l1 ++ l2) = skipn n l1 ++ skipn (n - length l1) l2
+
+firstn_all: forall (l), firstn (length l) l = l
+firstn_O: forall (l), firstn 0 l = []
+firstn_le_length: forall (n) (l), length (firstn n l) <= n
+firstn_nil: forall (n), firstn n [] = []
+removelast_firstn_len: forall (l), removelast l = firstn (Init.Nat.pred (length l)) l
+firstn_length: forall (n) (l), length (firstn n l) = Init.Nat.min n (length l)
+firstn_all2: forall [n] (l), length l <= n -> firstn n l = l
+firstn_skipn: forall (n) (l), firstn n l ++ skipn n l = l
+firstn_length_le: forall (l) [n], n <= length l -> length (firstn n l) = n
+firstn_cons: forall (n) (a : A) (l), firstn (S n) (a :: l) = a :: firstn n l
+firstn_skipn_comm: forall (m n) (l), firstn m (skipn n l) = skipn n (firstn (n + m) l)
+skipn_firstn_comm: forall (m n) (l), skipn m (firstn n l) = firstn (n - m) (skipn m l)
+firstn_removelast: forall [n] (l), n < length l -> firstn n (removelast l) = firstn n l
+combine_firstn_r: forall [A B : Type] (l) (l' : list B), combine l l' = combine (firstn (length l') l) l'
+combine_firstn_l: forall [A B : Type] (l) (l' : list B), combine l l' = combine l (firstn (length l) l')
+removelast_firstn: forall [n] (l), n < length l -> removelast (firstn (S n) l) = firstn n l
+firstn_app_2: forall (n) (l1 l2), firstn (length l1 + n) (l1 ++ l2) = l1 ++ firstn n l2
+firstn_app: forall (n) (l1 l2), firstn n (l1 ++ l2) = firstn n l1 ++ firstn (n - length l1) l2
+
 *)
 
 Theorem  skipn_n_smaller_leaves_not_nil:
@@ -52,6 +72,13 @@ Proof.
 	intros; apply skipn_n_smaller_leaves_not_nil; crush.
 Qed.
 
+Theorem length_cons_equal:
+	forall A B a (la: list A) b (lb: list B),
+		length (a :: la) = length (b :: lb) -> length la = length lb.
+Proof.
+	intros; induction la; crush.
+Qed.
+
 
 Section ListsCorrespond.
 	Variable T U: Type.
@@ -64,12 +91,119 @@ Section ListsCorrespond.
 	.
 	Hint Constructors ListsCorrespond: core.
 
+	Theorem ListsCorrespond_same_length:
+		forall lt lu, ListsCorrespond lt lu -> length lt = length lu.
+	Proof.
+		intros ? ? H; induction H; crush.
+	Qed.
+
+	Theorem ListsCorrespond_append:
+		forall lt_one lu_one lt_two lu_two,
+			ListsCorrespond lt_one lu_one
+			-> ListsCorrespond lt_two lu_two
+			-> ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two).
+	Proof.
+		Hint Rewrite -> app_nil_r.
+		intros ? ? ? ? H_one H_two; induction H_one; induction H_two; crush.
+	Qed.
+
+	Theorem ListsCorrespond_split_lengths:
+		forall lt_one lu_one lt_two lu_two,
+			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
+			-> length lt_one = length lu_one <-> length lt_two = length lu_two.
+	Proof.
+		intros;
+		remember (lt_one ++ lt_two) as lt;
+		remember (lu_one ++ lu_two) as lu;
+		assert (Htotal: length lt = length lu)
+			by apply (ListsCorrespond_same_length H);
+		assert (Hlenlt: length (lt_one ++ lt_two) = length lt_one + length lt_two)
+			by apply (app_length lt_one lt_two);
+		assert (Hlenlu: length (lu_one ++ lu_two) = length lu_one + length lu_two)
+			by apply (app_length lu_one lu_two);
+		crush.
+	Qed.
+
+	Ltac discriminate_length_ListCorrespond :=
+		try match goal with
+			| [ H : length (?t :: ?lt) = length (?u :: ?lu) |- _ ] =>
+				specialize (length_cons_equal H) as ?
+		end;
+		match goal with
+			| [
+				HL : length ?lt_one = length ?lu_one,
+				HC : ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+			|- _ ]  =>
+				idtac lt_one lu_one;
+				let F := fresh "F" in
+				assert (F: length lt_two = length lu_two)
+					by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
+				solve [discriminate F]
+			| [
+				HL : length ?lt_two = length ?lu_two,
+				HC : ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+			|- _ ]  =>
+				idtac lt_one lu_one;
+				let F := fresh "F" in
+				assert (F: length lt_two = length lu_two)
+					by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
+				solve [discriminate F]
+		end.
+
+	Theorem ListsCorrespond_split:
+		forall lt_one lu_one lt_two lu_two,
+			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
+			-> length lt_one = length lu_one
+			-> ListsCorrespond lt_one lu_one.
+			 (*/\ ListsCorrespond lt_two lu_two.*)
+	Proof.
+intros ?; induction lt_one;
+intros ?; induction lu_one;
+intros ? ? H Honelen; destruct lt_two; destruct lu_two;
+inversion H;
+try solve [crush].
+-
+discriminate_length_ListCorrespond.
+-
+discriminate_length_ListCorrespond.
+-
+apply ListsCorrespond_cons; try solve [crush].
+subst.
+apply (IHlt_one lu_one (t :: lt_two) (u :: lu_two)); crush.
+	Qed.
+
+	Theorem ListsCorrespond_firstn:
+		forall lt lu n,
+			ListsCorrespond lt lu
+			-> ListsCorrespond (firstn n lt) (firstn n lu).
+	Proof.
+(*firstn_skipn: forall (n) (l), firstn n l ++ skipn n l = l*)
+intros.
+
+
+intros ? ? n; induction n; intros H; induction H; try solve [crush].
+-
+simpl in *.
+
+
+intros H; induction H; crush.
+
+
+	Qed.
+
 	Inductive ListsMatch: list T -> list U -> Prop :=
 		| ListsMatch_nil: forall lu,  ListsMatch (@nil T) lu
 		| ListsMatch_cons: forall (t: T) (u: U) lt lu,
 			C t u -> ListsMatch lt lu -> ListsMatch (t :: lt) (u :: lu)
 	.
 	Hint Constructors ListsMatch: core.
+
+	Theorem ListsMatch_le_length:
+		forall lt lu, ListsMatch lt lu -> length lt <= length lu.
+	Proof.
+		intros ? ? H; induction H; crush.
+	Qed.
+
 
 	Theorem ListsCorrespond_ListsMatch:
 		forall lt lu, ListsCorrespond lt lu -> ListsMatch lt lu.
@@ -84,12 +218,8 @@ Section ListsCorrespond.
 			-> length lt = length lu
 			-> ListsCorrespond lt lu.
 	Proof.
-intros ? ? H Hlen.
-induction H.
-- destruct lu.
-	+ crush.
-	+ discriminate Hlen.
-- crush.
+		intros ? ? H Hlen.
+		induction H; destruct lu; crush.
 	Qed.
 
 	Theorem ListsMatch_portion_ListsCorrespond:
@@ -99,22 +229,6 @@ induction H.
 				lu = lu_corr ++ lu_ext /\ ListsCorrespond lt lu_corr.
 	Proof.
 
-	Qed.
-
-	Theorem ListsCorrespond_append:
-		forall lt_one lu_one lt_two lu_two,
-			ListsCorrespond lt_one lu_one
-			-> ListsCorrespond lt_two lu_two
-			-> ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two).
-	Proof.
-		Hint Rewrite -> app_nil_r.
-		intros ? ? ? ? H_one H_two; induction H_one; induction H_two; crush.
-	Qed.
-
-	Theorem ListsCorrespond_same_length:
-		forall lt lu, ListsCorrespond lt lu -> length lt = length lu.
-	Proof.
-		intros ? ? H; induction H; crush.
 	Qed.
 
 	Theorem ListsCorrespond_skip:
