@@ -87,6 +87,21 @@ Proof.
 	intros; induction la; crush.
 Qed.
 
+Ltac add_app_length :=
+	repeat match goal with
+	| H: ?l = ?a ++ ?b |- _ =>
+		first [notHyp (length (a ++ b) = length a + length b) | fail 2]
+		|| specialize (app_length a b) as ?
+	end.
+
+Ltac add_length_cons_equal :=
+	repeat match goal with
+		| [ H: length (?t :: ?lt) = length (?u :: ?lu) |- _ ] =>
+			first [notHyp (length lt = length lu) | fail 2]
+			|| specialize (length_cons_equal H) as ?
+	end.
+
+
 Section ListsCorrespond.
 	Variable T U: Type.
 	Variable C: T -> U -> Prop.
@@ -104,21 +119,18 @@ Section ListsCorrespond.
 		intros ? ? H; induction H; crush.
 	Qed.
 
-	Ltac enrich_ListsCorrespond :=
+	Ltac remember_ListsCorrespond :=
 		repeat match goal with
 		| H: ListsCorrespond ?lt ?lu |- _ =>
 			match goal with | _: lt = ?a, _: lu = ?b |- _ => fail 2 end
 			|| remember lt; remember lu
-		end;
+		end.
+
+	Ltac add_ListsCorrespond_same_length :=
 		repeat match goal with
 		| H: ListsCorrespond ?lt ?lu |- _ =>
 			first [notHyp (length lt = length lu) | fail 2]
 			|| specialize (ListsCorrespond_same_length H) as ?
-		end;
-		repeat match goal with
-		| H: ?l = ?a ++ ?b |- _ =>
-			first [notHyp (length (a ++ b) = length a + length b) | fail 2]
-			|| specialize (app_length a b) as ?
 		end.
 
 	Theorem ListsCorrespond_append:
@@ -139,9 +151,8 @@ Section ListsCorrespond.
 				C (safe_nth lt Hlt) (safe_nth lu Hlu).
 	Proof.
 		intros ? ? ? HC [Hlt | Hlu];
-		enrich_ListsCorrespond;
+		add_ListsCorrespond_same_length;
 		match goal with
-		(*ugh I'm trying to trim this *)
 		| HC: ListsCorrespond ?lt ?lu, HL: length ?lt = length ?lu |- _ =>
 			match goal with
 			| _: ?n < length lt |- _ =>
@@ -160,14 +171,13 @@ Section ListsCorrespond.
 			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
 			-> length lt_one = length lu_one <-> length lt_two = length lu_two.
 	Proof.
-		intros; enrich_ListsCorrespond; crush.
+		intros; remember_ListsCorrespond; add_ListsCorrespond_same_length; add_app_length; crush.
 	Qed.
 
-	(*
 	Ltac trivial_ListCorrespond :=
+		add_length_cons_equal;
 		try match goal with
-			| [ H: length (?t :: ?lt) = length (?u :: ?lu) |- _ ] =>
-				specialize (length_cons_equal H) as ?
+			| _: context[?l ++ []] |- _ => do 2 rewrite -> app_nil_r in *
 		end;
 		match goal with
 			| |- ListsCorrespond [] [] =>
@@ -177,11 +187,17 @@ Section ListsCorrespond.
 				HC: ListsCorrespond ?lt ?lu
 				|- ListsCorrespond (?t :: ?lt) (?u :: ?lu)
 			=>
-				solve [apply (ListsCorrespond_cons t u lt lu CTU HC)]
-			| H: ListsCorrespond [] (?u :: ?lu) => solve [inversion H]
-			| H: ListsCorrespond (?t :: ?lt) [] => solve [inversion H]
-			(* want cases to do more complex cons situations *)
-			|
+				solve [apply (ListsCorrespond_cons CTU HC)]
+
+			| HL: length (?t :: ?lt) = length [] |- _ =>
+				solve [simpl in HL; discriminate HL]
+			| HL: length [] = length (?u :: ?lu) |- _ =>
+				solve [simpl in HL; discriminate HL]
+
+			| H: ListsCorrespond [] (?u :: ?lu) |- _ => solve [inversion H]
+			| H: ListsCorrespond (?t :: ?lt) [] |- _ => solve [inversion H]
+
+			(*|
 				HL: length ?lt_one = length ?lu_one,
 				HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
 			|- _ =>
@@ -196,31 +212,42 @@ Section ListsCorrespond.
 				let F := fresh "F" in
 				assert (F: length lt_two = length lu_two)
 					by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
-				solve [discriminate F]
+				solve [discriminate F]*)
 		end.
 
 	Theorem ListsCorrespond_split:
-		forall lt_one lt_two lu_one lu_two,
+		forall lt_one lu_one lt_two lu_two,
 			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
-			-> length lt_one = length lu_one (*\/ length lt_two = length lu_two*)
+			-> length lt_one = length lu_one \/ length lt_two = length lu_two
 			-> ListsCorrespond lt_one lu_one /\ ListsCorrespond lt_two lu_two.
 	Proof.
-intros ?; induction lt_one;
-intros ?; induction lt_two;
-intros ? ? H Honelen; destruct lu_one; destruct lu_two;
-inversion H;
-split;
-solve_crush;
-try trivial_ListCorrespond.
--
-apply ListsCorrespond_cons; solve_crush.
-subst.
-apply (IHlt_one lu_one (t :: lt_two) (u :: lu_two)); crush.
--
-apply ListsCorrespond_cons; solve_crush.
-
+		intros ?; induction lt_one; intros ? ? ? H [Hlen | Hlen];
+		destruct lt_two; destruct lu_one; destruct lu_two; inversion H;
+		try match goal with
+		|
+			HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two),
+			HL: length ?lt_two = length ?lu_two
+		|- _ =>
+			apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC) in HL
+		end;
+		subst; split; try trivial_ListCorrespond;
+		try match goal with
+		| CTU: C ?t ?u |- ListsCorrespond (?t :: _) (?u :: _) =>
+			apply ListsCorrespond_cons; try assumption
+		end;
+		match goal with
+		| IH: forall lu_one lt_two lu_two,
+				ListsCorrespond (?lt_one ++ lt_two) (lu_one ++ lu_two)
+				-> length ?lt_one = length lu_one \/ length lt_two = length lu_two
+				-> ListsCorrespond ?lt_one lu_one /\ ListsCorrespond lt_two lu_two,
+			HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+			|- ListsCorrespond _ _
+		=>
+			apply (IHlt_one lu_one lt_two lu_two); crush
+		end.
 	Qed.
 
+	(*
 	Theorem ListsCorrespond_firstn:
 		forall lt lu n,
 			ListsCorrespond lt lu
