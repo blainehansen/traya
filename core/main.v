@@ -9,6 +9,16 @@ Require Import PeanoNat Lt.
 
 Require Import core.utils.
 
+Ltac notHyp P :=
+	match goal with
+	| [ _ : P |- _ ] => fail 1
+	| _ =>
+		match P with
+		| ?P1 /\ ?P2 => first [notHyp P1 | notHyp P2 | fail 2]
+		| _ => idtac
+		end
+	end.
+
 (*Definition ListsCorrespondBool lt lu :=
 	{ListsCorrespond lt lu} + {~(ListsCorrespond lt lu)}.
 Obligation Tactic := crush.
@@ -77,7 +87,6 @@ Proof.
 	intros; induction la; crush.
 Qed.
 
-
 Section ListsCorrespond.
 	Variable T U: Type.
 	Variable C: T -> U -> Prop.
@@ -94,6 +103,23 @@ Section ListsCorrespond.
 	Proof.
 		intros ? ? H; induction H; crush.
 	Qed.
+
+	Ltac enrich_ListsCorrespond :=
+		repeat match goal with
+		| H: ListsCorrespond ?lt ?lu |- _ =>
+			match goal with | _: lt = ?a, _: lu = ?b |- _ => fail 2 end
+			|| remember lt; remember lu
+		end;
+		repeat match goal with
+		| H: ListsCorrespond ?lt ?lu |- _ =>
+			first [notHyp (length lt = length lu) | fail 2]
+			|| specialize (ListsCorrespond_same_length H) as ?
+		end;
+		repeat match goal with
+		| H: ?l = ?a ++ ?b |- _ =>
+			first [notHyp (length (a ++ b) = length a + length b) | fail 2]
+			|| specialize (app_length a b) as ?
+		end.
 
 	Theorem ListsCorrespond_append:
 		forall lt_one lu_one lt_two lu_two,
@@ -112,43 +138,32 @@ Section ListsCorrespond.
 			-> exists (Hlt: n < length lt) (Hlu: n < length lu),
 				C (safe_nth lt Hlt) (safe_nth lu Hlu).
 	Proof.
-		intros ? ? ? HC.
-		intros [Hlt | Hlu].
-		exists _.
-
+		intros ? ? ? HC [Hlt | Hlu];
+		enrich_ListsCorrespond;
 		match goal with
-		| _: n < length lt |- _ =>
-			assert (Hlu: n < length lu)
-				by solve [rewrite <- (ListsCorrespond_same_length HC); assumption]
-		| _: n < length lu |- _ =>
-			assert (Hlt: n < length lt)
-				by solve [rewrite <- (ListsCorrespond_same_length HC); assumption]
-		end.
+		(*ugh I'm trying to trim this *)
+		| HC: ListsCorrespond ?lt ?lu, HL: length ?lt = length ?lu |- _ =>
+			match goal with
+			| _: ?n < length lt |- _ =>
+				assert (Hlu: n < length lu) by solve [rewrite <- HL; assumption]
+			| _: ?n < length lu |- _ =>
+				assert (Hlt: n < length lt) by solve [rewrite -> HL; assumption]
+			end
+		end;
 		exists Hlt; exists Hlu;
 		generalize dependent lu; generalize dependent lt;
-		induction n; intros; destruct lt; destruct lu; inversion HC; solve_crush.
+		induction n; intros; destruct lt; destruct lu; inversion HC; crush.
 	Qed.
-
-
-	(*
 
 	Theorem ListsCorrespond_split_lengths:
 		forall lt_one lu_one lt_two lu_two,
 			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
 			-> length lt_one = length lu_one <-> length lt_two = length lu_two.
 	Proof.
-		intros;
-		remember (lt_one ++ lt_two) as lt;
-		remember (lu_one ++ lu_two) as lu;
-		assert (Htotal: length lt = length lu)
-			by apply (ListsCorrespond_same_length H);
-		assert (Hlenlt: length (lt_one ++ lt_two) = length lt_one + length lt_two)
-			by apply (app_length lt_one lt_two);
-		assert (Hlenlu: length (lu_one ++ lu_two) = length lu_one + length lu_two)
-			by apply (app_length lu_one lu_two);
-		crush.
+		intros; enrich_ListsCorrespond; crush.
 	Qed.
 
+	(*
 	Ltac trivial_ListCorrespond :=
 		try match goal with
 			| [ H: length (?t :: ?lt) = length (?u :: ?lu) |- _ ] =>
