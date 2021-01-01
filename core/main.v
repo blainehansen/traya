@@ -43,33 +43,31 @@ firstn_length: forall (n) (l), length (firstn n l) = Init.Nat.min n (length l)
 firstn_all2: forall [n] (l), length l <= n -> firstn n l = l
 firstn_skipn: forall (n) (l), firstn n l ++ skipn n l = l
 firstn_length_le: forall (l) [n], n <= length l -> length (firstn n l) = n
-firstn_cons: forall (n) (a : A) (l), firstn (S n) (a :: l) = a :: firstn n l
+firstn_cons: forall (n) (a: A) (l), firstn (S n) (a :: l) = a :: firstn n l
 firstn_skipn_comm: forall (m n) (l), firstn m (skipn n l) = skipn n (firstn (n + m) l)
 skipn_firstn_comm: forall (m n) (l), skipn m (firstn n l) = firstn (n - m) (skipn m l)
 firstn_removelast: forall [n] (l), n < length l -> firstn n (removelast l) = firstn n l
-combine_firstn_r: forall [A B : Type] (l) (l' : list B), combine l l' = combine (firstn (length l') l) l'
-combine_firstn_l: forall [A B : Type] (l) (l' : list B), combine l l' = combine l (firstn (length l) l')
+combine_firstn_r: forall [A B: Type] (l) (l': list B), combine l l' = combine (firstn (length l') l) l'
+combine_firstn_l: forall [A B: Type] (l) (l': list B), combine l l' = combine l (firstn (length l) l')
 removelast_firstn: forall [n] (l), n < length l -> removelast (firstn (S n) l) = firstn n l
 firstn_app_2: forall (n) (l1 l2), firstn (length l1 + n) (l1 ++ l2) = l1 ++ firstn n l2
 firstn_app: forall (n) (l1 l2), firstn n (l1 ++ l2) = firstn n l1 ++ firstn (n - length l1) l2
 
 *)
 
-Theorem  skipn_n_smaller_leaves_not_nil:
+Theorem skipn_n_smaller_not_nil:
 	forall T n (l: list T), n < length l -> skipn n l <> [].
 Proof.
-	intros ? n; induction n; intros l; induction l; intros;
-	try solve [crush];
+	intros ? n; induction n; intros l; induction l; intros; solve_crush;
 	solve [simpl in *; apply IHn; crush].
 Qed.
 
-
-Theorem skipn_length_smaller_leaves_not_nil:
+Theorem skipn_length_smaller_not_nil:
 	forall T (bigger smaller: list T),
 		length smaller < length bigger
 		-> skipn (length smaller) bigger <> [].
 Proof.
-	intros; apply skipn_n_smaller_leaves_not_nil; crush.
+	intros; apply skipn_n_smaller_not_nil; crush.
 Qed.
 
 Theorem length_cons_equal:
@@ -107,6 +105,33 @@ Section ListsCorrespond.
 		intros ? ? ? ? H_one H_two; induction H_one; induction H_two; crush.
 	Qed.
 
+	Theorem ListsCorrespond_nth_C:
+		forall n lt lu,
+			ListsCorrespond lt lu
+			-> n < length lt \/ n < length lu
+			-> exists (Hlt: n < length lt) (Hlu: n < length lu),
+				C (safe_nth lt Hlt) (safe_nth lu Hlu).
+	Proof.
+		intros ? ? ? HC.
+		intros [Hlt | Hlu].
+		exists _.
+
+		match goal with
+		| _: n < length lt |- _ =>
+			assert (Hlu: n < length lu)
+				by solve [rewrite <- (ListsCorrespond_same_length HC); assumption]
+		| _: n < length lu |- _ =>
+			assert (Hlt: n < length lt)
+				by solve [rewrite <- (ListsCorrespond_same_length HC); assumption]
+		end.
+		exists Hlt; exists Hlu;
+		generalize dependent lu; generalize dependent lt;
+		induction n; intros; destruct lt; destruct lu; inversion HC; solve_crush.
+	Qed.
+
+
+	(*
+
 	Theorem ListsCorrespond_split_lengths:
 		forall lt_one lu_one lt_two lu_two,
 			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
@@ -124,26 +149,35 @@ Section ListsCorrespond.
 		crush.
 	Qed.
 
-	Ltac discriminate_length_ListCorrespond :=
+	Ltac trivial_ListCorrespond :=
 		try match goal with
-			| [ H : length (?t :: ?lt) = length (?u :: ?lu) |- _ ] =>
+			| [ H: length (?t :: ?lt) = length (?u :: ?lu) |- _ ] =>
 				specialize (length_cons_equal H) as ?
 		end;
 		match goal with
-			| [
-				HL : length ?lt_one = length ?lu_one,
-				HC : ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
-			|- _ ]  =>
-				idtac lt_one lu_one;
+			| |- ListsCorrespond [] [] =>
+				solve [apply ListsCorrespond_nil]
+			|
+				CTU: C ?t ?u,
+				HC: ListsCorrespond ?lt ?lu
+				|- ListsCorrespond (?t :: ?lt) (?u :: ?lu)
+			=>
+				solve [apply (ListsCorrespond_cons t u lt lu CTU HC)]
+			| H: ListsCorrespond [] (?u :: ?lu) => solve [inversion H]
+			| H: ListsCorrespond (?t :: ?lt) [] => solve [inversion H]
+			(* want cases to do more complex cons situations *)
+			|
+				HL: length ?lt_one = length ?lu_one,
+				HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+			|- _ =>
 				let F := fresh "F" in
 				assert (F: length lt_two = length lu_two)
 					by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
 				solve [discriminate F]
-			| [
-				HL : length ?lt_two = length ?lu_two,
-				HC : ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
-			|- _ ]  =>
-				idtac lt_one lu_one;
+			|
+				HL: length ?lt_two = length ?lu_two,
+				HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+			|- _ =>
 				let F := fresh "F" in
 				assert (F: length lt_two = length lu_two)
 					by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
@@ -151,25 +185,25 @@ Section ListsCorrespond.
 		end.
 
 	Theorem ListsCorrespond_split:
-		forall lt_one lu_one lt_two lu_two,
+		forall lt_one lt_two lu_one lu_two,
 			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
-			-> length lt_one = length lu_one
-			-> ListsCorrespond lt_one lu_one.
-			 (*/\ ListsCorrespond lt_two lu_two.*)
+			-> length lt_one = length lu_one (*\/ length lt_two = length lu_two*)
+			-> ListsCorrespond lt_one lu_one /\ ListsCorrespond lt_two lu_two.
 	Proof.
 intros ?; induction lt_one;
-intros ?; induction lu_one;
-intros ? ? H Honelen; destruct lt_two; destruct lu_two;
+intros ?; induction lt_two;
+intros ? ? H Honelen; destruct lu_one; destruct lu_two;
 inversion H;
-try solve [crush].
+split;
+solve_crush;
+try trivial_ListCorrespond.
 -
-discriminate_length_ListCorrespond.
--
-discriminate_length_ListCorrespond.
--
-apply ListsCorrespond_cons; try solve [crush].
+apply ListsCorrespond_cons; solve_crush.
 subst.
 apply (IHlt_one lu_one (t :: lt_two) (u :: lu_two)); crush.
+-
+apply ListsCorrespond_cons; solve_crush.
+
 	Qed.
 
 	Theorem ListsCorrespond_firstn:
@@ -181,7 +215,7 @@ apply (IHlt_one lu_one (t :: lt_two) (u :: lu_two)); crush.
 intros.
 
 
-intros ? ? n; induction n; intros H; induction H; try solve [crush].
+intros ? ? n; induction n; intros H; induction H; solve_crush.
 -
 simpl in *.
 
@@ -403,11 +437,11 @@ split.
 intros [extension []].
 subst.
 split.
-	Qed.
+	Qed.*)
 
 End ListsCorrespond.
 
-Theorem ListsCorrespond_transfer:
+(*Theorem ListsCorrespond_transfer:
 	forall T CA CB,
 		(forall a b, CA a b <-> CB a b) ->
 		forall lta ltb, @ListsCorrespond T T CA lta ltb <-> @ListsCorrespond T T CB lta ltb.
@@ -476,13 +510,13 @@ Definition PathMatchesStream path stream :=
 	@ListsCorrespond TokenDefinition Token TokenMatches path stream /\ path <> [].
 Hint Unfold PathMatchesStream: core.
 
-		(*| [ H : TokenMatches _ _ |- _ ] =>*)
+		(*| [ H: TokenMatches _ _ |- _ ] =>*)
 			(*token_unfold; crush*)
 Ltac invert_PathMatchesStream :=
 	crush; repeat match goal with
-		| [ H : PathMatchesStream _ _ |- _ ] =>
+		| [ H: PathMatchesStream _ _ |- _ ] =>
 			inversion H; clear H; crush
-		| [ H : @ListsCorrespond _ _ _ _ _ |- _ ] =>
+		| [ H: @ListsCorrespond _ _ _ _ _ |- _ ] =>
 			inversion H; clear H; crush
 	end.
 
@@ -542,7 +576,7 @@ Theorem PathSameStartAs_if_not_then_not_same:
 Proof. crush. Qed.
 Hint Resolve PathSameStartAs_if_not_then_not_same: core.
 
-(*H : forall stream : TokenStream,
+(*H: forall stream: TokenStream,
 			PathMatchesStream
 				(a :: smaller) stream ->
 			PathMatchesStream [] stream*)
@@ -646,6 +680,8 @@ Theorem Node_add_non_optional_increases_match_length:
 Proof.
 	intros n s ns ss r ma. inversion ma; crush. inversion H2; crush. inversion H; crush.
 Qed.
+*)
+
 
 (*
 a correct lookahead is one that, for some nodes/node lists A and B
