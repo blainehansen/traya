@@ -393,6 +393,8 @@ apply H; crush.
 Qed.
 
 
+an interesting idea for matching: if a list extends a smaller one, then it is contradictory to say that the smaller one matches but the bigger one doesn't. this could be the crux of what it means for something to "lookahead".
+
 Definition TokenDefinition := String.string.
 Definition Token := String.string.
 
