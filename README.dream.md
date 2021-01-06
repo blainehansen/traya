@@ -28,6 +28,7 @@ json =
   | object
   | primitive
 
+@manySeparated[$body, $sep] = $body ($sep $body)*
 @separatedByCommas[$def] = @manySeparated[$def, _:comma]
 
 array = "[" @separatedByCommas[json]? "]"
@@ -44,7 +45,7 @@ key = :str ":"
 
 ```ts
 // in a macro-ts world someday!
-import { ParserCreator } from @kreia!!('./json')
+import { ParserCreator } from kreia!!('./json')
 
 type Json =
   | JsonPrimitive
@@ -105,7 +106,7 @@ const okObject = parser.json(`{
 }`)
 
 const okNull = parser.json('null')
-const okArray = parser.json('[5, 4, 3, "sdf dfa fndsf"]')
+const okArray = parser.json('[5, 4, 3, "yo yo yo"]')
 const errJson = parser.json('5, 4')
 
 const okPrimitive = parser.primitive('true')

@@ -19,17 +19,21 @@ Ltac notHyp P :=
 		end
 	end.
 
-(*Definition ListsCorrespondBool lt lu :=
-	{ListsCorrespond lt lu} + {~(ListsCorrespond lt lu)}.
+Theorem contrapositive: forall P Q: Prop,
+	(P -> Q) -> (~Q -> ~P).
+Proof. crush. Qed.
+
+(*Definition TotalAlignBool lt lu :=
+	{TotalAlign lt lu} + {~(TotalAlign lt lu)}.
 Obligation Tactic := crush.
-Fixpoint lists_correspond
-	(corresponder: forall t u, {C t u} + {~(C t u)})
+Fixpoint lists_align
+	(aligner: forall t u, {C t u} + {~(C t u)})
 	lt lu
-: ListsCorrespondBool lt lu :=
+: TotalAlignBool lt lu :=
 	match lt, lu with
 	| [], [] => Yes
-	| (t :: lt'), (u :: lu') => if corresponder t u
-		then Reduce (lists_correspond corresponder lt' lu')
+	| (t :: lt'), (u :: lu') => if aligner t u
+		then Reduce (lists_align aligner lt' lu')
 		else No
 	| _, _ => No
 	end.*)
@@ -87,6 +91,22 @@ Proof.
 	intros; induction la; crush.
 Qed.
 
+
+(*firstn_app_2: firstn (length l1 + n) (l1 ++ l2) = l1 ++ firstn n l2*)
+Theorem firstn_length_append:
+	forall T (l1 l2: list T), firstn (length l1) (l1 ++ l2) = l1.
+Proof.
+	intros.
+	replace (length l1) with (length l1 + 0).
+	replace l1 with (l1 ++ (firstn 0 l2)).
+	simpl in *.
+	replace (length (l1 ++ []) + 0) with (length l1 + 0).
+	replace ((l1 ++ []) ++ l2) with (l1 ++ l2).
+	apply (firstn_app_2 0 l1 l2).
+	Hint Rewrite -> app_nil_r.
+	crush. crush. crush. crush.
+Qed.
+
 Ltac add_append_length :=
 	repeat match goal with
 	| H: ?l = ?a ++ ?b |- _ =>
@@ -101,59 +121,85 @@ Ltac add_length_cons_equal :=
 			|| specialize (length_cons_equal H) as ?
 	end.
 
-
-Section ListsCorrespond.
+Section ListDivergence.
 	Variable T U: Type.
 	Variable C: T -> U -> Prop.
 
-	Inductive ListsCorrespond: list T -> list U -> Prop :=
-		| ListsCorrespond_nil: ListsCorrespond (@nil T) (@nil U)
-		| ListsCorrespond_cons: forall (t: T) (u: U) lt lu,
-			C t u -> ListsCorrespond lt lu -> ListsCorrespond (t :: lt) (u :: lu)
-	.
-	Hint Constructors ListsCorrespond: core.
+	Inductive Diverge: list T -> list U -> Prop :=
+		| Diverge_nil: forall (t: T) lt, Diverge (t :: lt) (@nil U)
+	  | Diverge_cons: forall (t: T) (u: U) lt lu,
+	  	~(C t u) -> Diverge (t :: lt) (u :: lu)
+  .
+End ListDivergence.
+Definition EqualityDiverge (T: Type) := (@Diverge T T (fun a b => a = b)).
 
-	Theorem ListsCorrespond_same_length:
-		forall lt lu, ListsCorrespond lt lu -> length lt = length lu.
+
+Section ListAlignment.
+	Variable T U: Type.
+	Variable C: T -> U -> Prop.
+
+	(* definition of TotalAlign *)
+	Inductive TotalAlign: list T -> list U -> Prop :=
+		| TotalAlign_nil: TotalAlign (@nil T) (@nil U)
+		| TotalAlign_cons: forall (t: T) (u: U) lt lu,
+			C t u -> TotalAlign lt lu -> TotalAlign (t :: lt) (u :: lu)
+	.
+	Hint Constructors TotalAlign: core.
+
+	(* properties of TotalAlign *)
+	Theorem TotalAlign_contradicts_Diverge:
+		forall lt lu, TotalAlign lt lu -> ~(Diverge C lt lu).
+	Proof.
+		intros ? ? HA HD; inversion HA; inversion HD; crush.
+	Qed.
+	Theorem Diverge_contradicts_TotalAlign:
+		forall lt lu, Diverge C lt lu -> ~(TotalAlign lt lu).
+	Proof.
+		intros ? ? ? HA;
+		apply (contrapositive (TotalAlign_contradicts_Diverge HA)); crush.
+	Qed.
+
+	Theorem TotalAlign_same_length:
+		forall lt lu, TotalAlign lt lu -> length lt = length lu.
 	Proof.
 		intros ? ? H; induction H; crush.
 	Qed.
 
-	Ltac remember_ListsCorrespond :=
+	Ltac remember_TotalAlign :=
 		repeat match goal with
-		| H: ListsCorrespond ?lt ?lu |- _ =>
+		| H: TotalAlign ?lt ?lu |- _ =>
 			match goal with | _: lt = ?a, _: lu = ?b |- _ => fail 2 end
 			|| remember lt; remember lu
 		end.
 
-	Ltac add_ListsCorrespond_same_length :=
+	Ltac add_TotalAlign_same_length :=
 		repeat match goal with
-		| H: ListsCorrespond ?lt ?lu |- _ =>
+		| H: TotalAlign ?lt ?lu |- _ =>
 			first [notHyp (length lt = length lu) | fail 2]
-			|| specialize (ListsCorrespond_same_length H) as ?
+			|| specialize (TotalAlign_same_length H) as ?
 		end.
 
-	Theorem ListsCorrespond_append:
+	Theorem TotalAlign_append:
 		forall lt_one lu_one lt_two lu_two,
-			ListsCorrespond lt_one lu_one
-			-> ListsCorrespond lt_two lu_two
-			-> ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two).
+			TotalAlign lt_one lu_one
+			-> TotalAlign lt_two lu_two
+			-> TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two).
 	Proof.
 		Hint Rewrite -> app_nil_r.
 		intros ? ? ? ? H_one H_two; induction H_one; induction H_two; crush.
 	Qed.
 
-	Theorem ListsCorrespond_nth_C:
+	Theorem TotalAlign_nth_C:
 		forall n lt lu,
-			ListsCorrespond lt lu
+			TotalAlign lt lu
 			-> n < length lt \/ n < length lu
 			-> exists (Hlt: n < length lt) (Hlu: n < length lu),
 				C (safe_nth lt Hlt) (safe_nth lu Hlu).
 	Proof.
 		intros ? ? ? HC [Hlt | Hlu];
-		add_ListsCorrespond_same_length;
+		add_TotalAlign_same_length;
 		match goal with
-		| HC: ListsCorrespond ?lt ?lu, HL: length ?lt = length ?lu |- _ =>
+		| HC: TotalAlign ?lt ?lu, HL: length ?lt = length ?lu |- _ =>
 			match goal with
 			| _: ?n < length lt |- _ =>
 				assert (Hlu: n < length lu) by solve [rewrite <- HL; assumption]
@@ -166,146 +212,224 @@ Section ListsCorrespond.
 		induction n; intros; destruct lt; destruct lu; inversion HC; crush.
 	Qed.
 
-	Theorem ListsCorrespond_split_lengths:
+	Theorem TotalAlign_split_lengths:
 		forall lt_one lu_one lt_two lu_two,
-			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
+			TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two)
 			-> length lt_one = length lu_one <-> length lt_two = length lu_two.
 	Proof.
-		intros; remember_ListsCorrespond;
-		add_ListsCorrespond_same_length; add_append_length; crush.
+		intros; remember_TotalAlign;
+		add_TotalAlign_same_length; add_append_length; crush.
 	Qed.
 
-	Ltac trivial_ListCorrespond :=
+	Ltac trivial_TotalAlign :=
 		add_length_cons_equal;
 		try match goal with
 			| _: context[?l ++ []] |- _ => do 2 rewrite -> app_nil_r in *
 		end;
 		match goal with
-			| |- ListsCorrespond [] [] =>
-				solve [apply ListsCorrespond_nil]
+			| |- TotalAlign [] [] =>
+				solve [apply TotalAlign_nil]
 			|
 				CTU: C ?t ?u,
-				HC: ListsCorrespond ?lt ?lu
-				|- ListsCorrespond (?t :: ?lt) (?u :: ?lu)
+				HC: TotalAlign ?lt ?lu
+				|- TotalAlign (?t :: ?lt) (?u :: ?lu)
 			=>
-				solve [apply (ListsCorrespond_cons CTU HC)]
+				solve [apply (TotalAlign_cons CTU HC)]
 
 			| HL: length (?t :: ?lt) = length [] |- _ =>
 				solve [simpl in HL; discriminate HL]
 			| HL: length [] = length (?u :: ?lu) |- _ =>
 				solve [simpl in HL; discriminate HL]
 
-			| H: ListsCorrespond [] (?u :: ?lu) |- _ => solve [inversion H]
-			| H: ListsCorrespond (?t :: ?lt) [] |- _ => solve [inversion H]
-
-			(*|
-				HL: length ?lt_one = length ?lu_one,
-				HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
-			|- _ =>
-				let F := fresh "F" in
-				assert (F: length lt_two = length lu_two)
-					by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
-				solve [discriminate F]
-			|
-				HL: length ?lt_two = length ?lu_two,
-				HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
-			|- _ =>
-				let F := fresh "F" in
-				assert (F: length lt_two = length lu_two)
-					by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
-				solve [discriminate F]*)
+			| H: TotalAlign [] (?u :: ?lu) |- _ => solve [inversion H]
+			| H: TotalAlign (?t :: ?lt) [] |- _ => solve [inversion H]
 		end.
 
-	Theorem ListsCorrespond_append_split:
+	Theorem TotalAlign_append_split:
 		forall lt_one lu_one lt_two lu_two,
-			ListsCorrespond (lt_one ++ lt_two) (lu_one ++ lu_two)
+			TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two)
 			-> length lt_one = length lu_one \/ length lt_two = length lu_two
-			-> ListsCorrespond lt_one lu_one /\ ListsCorrespond lt_two lu_two.
+			-> TotalAlign lt_one lu_one /\ TotalAlign lt_two lu_two.
 	Proof.
 		intros ?; induction lt_one; intros ? ? ? H [Hlen | Hlen];
 		destruct lt_two; destruct lu_one; destruct lu_two; inversion H;
 		try match goal with
 		|
-			HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two),
+			HC: TotalAlign (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two),
 			HL: length ?lt_two = length ?lu_two
 		|- _ =>
-			apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC) in HL
+			apply (TotalAlign_split_lengths lt_one lu_one lt_two lu_two HC) in HL
 		end;
-		subst; split; try trivial_ListCorrespond;
+		subst; split; try trivial_TotalAlign;
 		try match goal with
-		| CTU: C ?t ?u |- ListsCorrespond (?t :: _) (?u :: _) =>
-			apply ListsCorrespond_cons; try assumption
+		| CTU: C ?t ?u |- TotalAlign (?t :: _) (?u :: _) =>
+			apply TotalAlign_cons; try assumption
 		end;
 		match goal with
 		| IH: forall lu_one lt_two lu_two,
-				ListsCorrespond (?lt_one ++ lt_two) (lu_one ++ lu_two)
+				TotalAlign (?lt_one ++ lt_two) (lu_one ++ lu_two)
 				-> length ?lt_one = length lu_one \/ length lt_two = length lu_two
-				-> ListsCorrespond ?lt_one lu_one /\ ListsCorrespond lt_two lu_two,
-			HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
-			|- ListsCorrespond _ _
+				-> TotalAlign ?lt_one lu_one /\ TotalAlign lt_two lu_two,
+			HC: TotalAlign (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+			|- TotalAlign _ _
 		=>
-			apply (IHlt_one lu_one lt_two lu_two); crush
+			apply (IH lu_one lt_two lu_two); crush
 		end.
 	Qed.
 
-	Theorem ListsCorrespond_split:
-		forall n lt lu, ListsCorrespond lt lu
-			-> ListsCorrespond (firstn n lt) (firstn n lu)
-				/\ ListsCorrespond (skipn n lt) (skipn n lu).
+	Theorem TotalAlign_split:
+		forall n lt lu, TotalAlign lt lu
+			-> TotalAlign (firstn n lt) (firstn n lu)
+				/\ TotalAlign (skipn n lt) (skipn n lu).
 	Proof.
-		intros ? ? ? H; specialize (ListsCorrespond_same_length H) as Hlen;
+		intros ? ? ? H; specialize (TotalAlign_same_length H) as Hlen;
 		rewrite <- (firstn_skipn n lt) in H; rewrite <- (firstn_skipn n lu) in H;
-		apply (ListsCorrespond_append_split _ _ _ _ H); right;
+		apply (TotalAlign_append_split _ _ _ _ H); right;
 		do 2 rewrite -> skipn_length; rewrite Hlen; reflexivity.
 	Qed.
 
-	Inductive ListsMatch: list T -> list U -> Prop :=
-		| ListsMatch_nil: forall lu,  ListsMatch (@nil T) lu
-		| ListsMatch_cons: forall (t: T) (u: U) lt lu,
-			C t u -> ListsMatch lt lu -> ListsMatch (t :: lt) (u :: lu)
+	Theorem TotalAlign_shorter:
+		forall bigger smaller extension align,
+			bigger = smaller ++ extension
+			-> TotalAlign bigger align
+			-> TotalAlign smaller (firstn (length smaller) align).
+	Proof.
+		intros ? ? ? ? Heq HC; subst;
+		apply (TotalAlign_split (length smaller)) in HC as [HC _];
+		rewrite -> firstn_length_append in HC; assumption.
+	Qed.
+
+
+	(* definition of FrontAlign *)
+	Inductive FrontAlign: list T -> list U -> Prop :=
+		| FrontAlign_nil: forall lu, FrontAlign (@nil T) lu
+		| FrontAlign_cons: forall (t: T) (u: U) lt lu,
+			C t u -> FrontAlign lt lu -> FrontAlign (t :: lt) (u :: lu)
 	.
-	Hint Constructors ListsMatch: core.
+	Hint Constructors FrontAlign: core.
 
-	Theorem ListsMatch_le_length:
-		forall lt lu, ListsMatch lt lu -> length lt <= length lu.
+	(* properties of FrontAlign *)
+	Theorem FrontAlign_contradicts_Diverge:
+		forall lt lu, FrontAlign lt lu -> ~(Diverge C lt lu).
+	Proof.
+		intros ? ? HA HD; inversion HA; inversion HD; crush.
+	Qed.
+	Theorem Diverge_contradicts_FrontAlign:
+		forall lt lu, Diverge C lt lu -> ~(FrontAlign lt lu).
+	Proof.
+		intros ? ? ? HA;
+		apply (contrapositive (FrontAlign_contradicts_Diverge HA)); crush.
+	Qed.
+
+	Theorem FrontAlign_le_length:
+		forall lt lu, FrontAlign lt lu -> length lt <= length lu.
 	Proof.
 		intros ? ? H; induction H; crush.
 	Qed.
 
-	Theorem ListsCorrespond_ListsMatch:
-		forall lt lu, ListsCorrespond lt lu -> ListsMatch lt lu.
+	Theorem FrontAlign_shorter:
+		forall bigger smaller extension aligned,
+			bigger = smaller ++ extension
+			-> FrontAlign bigger aligned
+			-> FrontAlign smaller aligned.
+	Proof.
+		intros ? ? ? ? ? HM; subst; generalize dependent aligned;
+		induction smaller; intros; destruct aligned; inversion HM; crush.
+	Qed.
+
+	Theorem FrontAlign_shorter_contrapositive:
+		forall bigger smaller extension aligned,
+			bigger = smaller ++ extension
+			-> ~(FrontAlign smaller aligned)
+			-> ~(FrontAlign bigger aligned).
+	Proof.
+		intros ? ? ? ? Hb ?;
+		apply (contrapositive (@FrontAlign_shorter bigger smaller _ _ Hb));
+		assumption.
+	Qed.
+
+
+	(* properties of prediction or lookahead *)
+(*
+with this concept of divergence, we can finally understand this base layer of basic token lookaheads
+*)
+
+	Inductive PredictsAgainst: list T -> list T -> list T -> Prop :=
+	  | PredictsAgainst_usefully_extends:
+	  	forall lookahead main against extension n rest,
+	  	main = lookahead ++ extension -> extension <> []
+	  	-> against = (firstn n main) ++ rest
+	  	-> EqualityDiverge rest main
+	  	-> PredictsAgainst lookahead main against
+		| PredictsAgainst_contained:
+			forall lookahead main against extension,
+			main = lookahead
+			-> against = main ++ extension,
+			-> PredictsAgainst lookahead main against
+  .
+
+  Theorem PredictsAgainst_predicts_accurately:
+  	forall lookahead main against aligned,
+  		PredictsAgainst lookahead main against
+		  -> (
+		  	(FrontAlign main aligned -> FrontAlign lookahead aligned)
+		  	/\ (FrontAlign lookahead aligned -> ~(FrontAlign against aligned))
+	  	)
+		  	\/ exists , .
+  Proof.
+
+  Qed.
+
+
+	Definition predicts_against (lookahead main against: list T) :=
+		forall aligned,
+			FrontAlign lookahead
+			FrontAlign lookahead aligned -> ~()
+
+		forall lookahead, exists extension, main = lookahead ++ extension
+			/\ ~(exists extension, ).
+
+	Definition  :=
+	  .
+
+	Theorem : .
+	Proof.
+
+	Qed.
+
+
+	(* relationships between TotalAlign and FrontAlign *)
+	Theorem TotalAlign_FrontAlign:
+		forall lt lu, TotalAlign lt lu -> FrontAlign lt lu.
 	Proof.
 		intros ? ? H; induction H; crush.
 	Qed.
-	Hint Resolve ListsCorrespond_ListsMatch: core.
+	Hint Resolve TotalAlign_FrontAlign: core.
 
-	Theorem ListsMatch_same_length_ListsCorrespond:
+	Theorem FrontAlign_same_length_TotalAlign:
 		forall lt lu,
-			ListsMatch lt lu
+			FrontAlign lt lu
 			-> length lt = length lu
-			-> ListsCorrespond lt lu.
+			-> TotalAlign lt lu.
 	Proof.
-		intros ? ? H Hlen.
-		induction H; destruct lu; crush.
+		intros ? ? H ?; induction H; destruct lu; crush.
 	Qed.
 
-	Theorem ListsMatch_portion_ListsCorrespond:
-		forall lt lu,
-			ListsMatch lt lu
-			-> exists lu_corr lu_ext,
-				lu = lu_corr ++ lu_ext /\ ListsCorrespond lt lu_corr.
+	Theorem FrontAlign_firstn_TotalAlign:
+		forall lt lu, FrontAlign lt lu
+			-> TotalAlign lt (firstn (length lt) lu).
 	Proof.
-		intros ? ? HM;
-		exists (firstn (length lt) lu); exists (skipn (length lt) lu); split;
-		try solve [symmetry; apply (firstn_skipn (length lt) lu)];
-		induction HM; crush.
+		intros ? ? H; induction H; crush.
 	Qed.
 
+
+
+	(* non-trivial extension *)
 	Definition list_extends bigger smaller :=
 		exists extension: list T, extension <> [] /\ bigger = smaller ++ extension.
 	Hint Unfold list_extends: core.
 
-	Theorem ListsCorrespond_extends_longer:
+	Theorem TotalAlign_extends_longer:
 		forall bigger smaller, list_extends bigger smaller
 			-> length smaller < length bigger.
 	Proof.
@@ -313,62 +437,42 @@ Section ListsCorrespond.
 		induction smaller; destruct extension; crush.
 	Qed.
 
-	Theorem ListsCorrespond_extends_corresponds_longer:
-		forall bigger smaller smaller_correspond bigger_correspond,
+	Theorem TotalAlign_extends_aligns_longer:
+		forall bigger smaller smaller_align bigger_align,
 			list_extends bigger smaller
-			-> ListsCorrespond smaller smaller_correspond
-			-> ListsCorrespond bigger bigger_correspond
-			-> length smaller_correspond < length bigger_correspond.
+			-> TotalAlign smaller smaller_align
+			-> TotalAlign bigger bigger_align
+			-> length smaller_align < length bigger_align.
 	Proof.
-		intros ? ? ? ? extends SC BC;
-		rewrite <- (ListsCorrespond_same_length SC);
-		rewrite <- (ListsCorrespond_same_length BC);
-		apply ListsCorrespond_extends_longer; exact extends.
+		intros ? ? ? ? extends HS HB;
+		rewrite <- (TotalAlign_same_length HS);
+		rewrite <- (TotalAlign_same_length HB);
+		apply TotalAlign_extends_longer; exact extends.
 	Qed.
 
-	(*Theorem ListsMatch_shorter:
-		forall total smaller extension matched,
-			total = smaller ++ extension
-			-> ListsMatch total matched
-			-> ListsMatch smaller matched.
-	Proof.
-
-	Qed.*)
-
-	(*Theorem ListsCorrespond_extends:
-		forall bigger smaller bigger_correspond,
+	Theorem FrontAlign_extends:
+		forall bigger smaller aligned,
 			list_extends bigger smaller
-			-> ListsCorrespond bigger bigger_correspond
-			-> exists smaller_correspond extension,
-				bigger_correspond = smaller_correspond ++ extension
-				/\ ListsCorrespond smaller smaller_correspond.
+			-> FrontAlign bigger aligned
+			-> FrontAlign smaller aligned.
 	Proof.
-
-	Qed.*)
-
-	Theorem ListsMatch_extends:
-		forall bigger smaller matched,
-			list_extends bigger smaller
-			-> ListsMatch bigger matched
-			-> ListsMatch smaller matched.
-	Proof.
-		intros ? ? ? [extension [Hne Hb]] Hm; subst; generalize dependent matched;
-		induction smaller; intros; destruct matched; inversion Hm; crush.
+		intros ? ? ? [extension [_ HB]] HM;
+		apply (FrontAlign_shorter _ _ HB HM).
 	Qed.
 
 
 	(*
 
-	Definition ListsCorrespond_contains bigger smaller :=
-		(forall lu, ListsCorrespond smaller lu -> ListsCorrespond bigger lu)
-		/\ exists lu, ListsCorrespond bigger lu /\ ~(ListsCorrespond smaller lu).
-	Hint Unfold ListsCorrespond_contains: core.
+	Definition TotalAlign_contains bigger smaller :=
+		(forall lu, TotalAlign smaller lu -> TotalAlign bigger lu)
+		/\ exists lu, TotalAlign bigger lu /\ ~(TotalAlign smaller lu).
+	Hint Unfold TotalAlign_contains: core.
 
-	Theorem ListsCorrespond_extends_equivalent_contains:
+	Theorem TotalAlign_extends_equivalent_contains:
 		forall smaller bigger,
-			list_extends smaller bigger <-> ListsCorrespond_contains smaller bigger.
+			list_extends smaller bigger <-> TotalAlign_contains smaller bigger.
 	Proof.
-		unfold list_extends in *; unfold ListsCorrespond_contains in *.
+		unfold list_extends in *; unfold TotalAlign_contains in *.
 split.
 
 -
@@ -377,18 +481,44 @@ subst.
 split.
 	Qed.*)
 
-End ListsCorrespond.
+End ListAlignment.
 
-(*Theorem ListsCorrespond_transfer:
+
+Section FoldsAlignment.
+	Variable T U: Type.
+	Variable C: T -> list U -> Prop.
+
+	(* definition of Foldsalign *)
+	Inductive Foldsalign: list T -> list U -> Prop :=
+		| Foldsalign_nil: Foldsalign (@nil T) (@nil U)
+		| Foldsalign_cons: forall (t: T) (us: list U) lt lu,
+			C t us -> Foldsalign lt lu -> Foldsalign (t :: lt) (us ++ lu)
+	.
+	Hint Constructors Foldsalign: core.
+
+
+	(* definition of FoldsMatch *)
+	Inductive FoldsMatch: list T -> list U -> Prop :=
+		| FoldsMatch_nil: forall lu, FoldsMatch (@nil T) lu
+		| FoldsMatch_cons: forall (t: T) (us: list U) lt lu,
+			C t us -> FoldsMatch lt lu -> FoldsMatch (t :: lt) (us ++ lu)
+	.
+	Hint Constructors FoldsMatch: core.
+
+
+End FoldsAlignment.
+
+
+(*Theorem TotalAlign_transfer:
 	forall T CA CB,
 		(forall a b, CA a b <-> CB a b) ->
-		forall lta ltb, @ListsCorrespond T T CA lta ltb <-> @ListsCorrespond T T CB lta ltb.
+		forall lta ltb, @TotalAlign T T CA lta ltb <-> @TotalAlign T T CB lta ltb.
 Proof.
 split; generalize dependent ltb;
 induction lta; intros ltb; induction ltb;
-intros HCA; try apply ListsCorrespond_nil; try inversion HCA; subst;
+intros HCA; try apply TotalAlign_nil; try inversion HCA; subst;
 
-apply ListsCorrespond_cons; crush.
+apply TotalAlign_cons; crush.
 apply H; crush.
 Qed.
 
@@ -427,10 +557,10 @@ Definition TokenPath := list TokenDefinition.
 Definition TokenStream := list Token.
 
 Definition TokenPathsSame a b :=
-	@ListsCorrespond TokenDefinition TokenDefinition TokenDefinitionsSame a b.
+	@TotalAlign TokenDefinition TokenDefinition TokenDefinitionsSame a b.
 Hint Unfold TokenPathsSame: core.
 Definition TokenPathsEquivalent a b :=
-	@ListsCorrespond TokenDefinition TokenDefinition TokenDefinitionsEquivalent a b.
+	@TotalAlign TokenDefinition TokenDefinition TokenDefinitionsEquivalent a b.
 Hint Unfold TokenPathsEquivalent: core.
 
 Ltac path_unfold :=
@@ -442,12 +572,12 @@ Ltac path_unfold :=
 Theorem TokenPathsSameEquivalent:
 	forall a b, TokenPathsSame a b <-> TokenPathsEquivalent a b.
 Proof.
-	split; apply (@ListsCorrespond_transfer TokenDefinition TokenDefinitionsSame TokenDefinitionsEquivalent TokenDefinitionsSameEquivalent).
+	split; apply (@TotalAlign_transfer TokenDefinition TokenDefinitionsSame TokenDefinitionsEquivalent TokenDefinitionsSameEquivalent).
 Qed.
 Hint Rewrite TokenPathsSameEquivalent: core.
 
 Definition PathMatchesStream path stream :=
-	@ListsCorrespond TokenDefinition Token TokenMatches path stream /\ path <> [].
+	@TotalAlign TokenDefinition Token TokenMatches path stream /\ path <> [].
 Hint Unfold PathMatchesStream: core.
 
 		(*| [ H: TokenMatches _ _ |- _ ] =>*)
@@ -456,7 +586,7 @@ Ltac invert_PathMatchesStream :=
 	crush; repeat match goal with
 		| [ H: PathMatchesStream _ _ |- _ ] =>
 			inversion H; clear H; crush
-		| [ H: @ListsCorrespond _ _ _ _ _ |- _ ] =>
+		| [ H: @TotalAlign _ _ _ _ _ |- _ ] =>
 			inversion H; clear H; crush
 	end.
 
@@ -472,7 +602,7 @@ Hint Resolve PathMatchesStream_stream_not_empty: core.
 
 Theorem PathMatchesStream_same_length:
 	forall path stream, PathMatchesStream path stream -> length path = length stream.
-Proof. intros ? ? [->%ListsCorrespond_same_length]; easy. Qed.
+Proof. intros ? ? [->%TotalAlign_same_length]; easy. Qed.
 
 Theorem PathMatchesStream_length_non_zero:
 	forall path stream, PathMatchesStream path stream -> 0 <> (length path) /\ 0 <> (length stream).

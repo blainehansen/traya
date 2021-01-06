@@ -1,3 +1,36 @@
+(*Theorem ListsMatch_portion_ListsCorrespond:
+	forall lt lu,
+		ListsMatch lt lu
+		-> exists lu_corr lu_ext,
+			lu = lu_corr ++ lu_ext /\ ListsCorrespond lt lu_corr.
+Proof.
+	intros ? ? HM;
+	exists (firstn (length lt) lu); exists (skipn (length lt) lu); split;
+	try solve [symmetry; apply (firstn_skipn (length lt) lu)];
+	induction HM; crush.
+Qed.*)
+
+
+
+(*|
+	HL: length ?lt_one = length ?lu_one,
+	HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+|- _ =>
+	let F := fresh "F" in
+	assert (F: length lt_two = length lu_two)
+		by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
+	solve [discriminate F]
+|
+	HL: length ?lt_two = length ?lu_two,
+	HC: ListsCorrespond (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
+|- _ =>
+	let F := fresh "F" in
+	assert (F: length lt_two = length lu_two)
+		by apply (ListsCorrespond_split_lengths lt_one lu_one lt_two lu_two HC), HL;
+	solve [discriminate F]*)
+
+
+
 (*
 Fixpoint ListsCorrespondComp {T U: Type} (C: T -> U -> Prop) (lt: list T) (lu: list U): Prop :=
 	match lt, lu with
