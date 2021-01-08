@@ -1,3 +1,63 @@
+	(*
+	Definition list_extends bigger smaller :=
+		exists extension: list T, extension <> [] /\ bigger = smaller ++ extension.
+	Hint Unfold list_extends: core.
+
+	Theorem TotalAlign_extends_longer:
+		forall bigger smaller, list_extends bigger smaller
+			-> length smaller < length bigger.
+	Proof.
+		intros ? ? [extension []]; subst;
+		induction smaller; destruct extension; crush.
+	Qed.
+
+	Theorem TotalAlign_extends_aligns_longer:
+		forall bigger smaller smaller_align bigger_align,
+			list_extends bigger smaller
+			-> TotalAlign smaller smaller_align
+			-> TotalAlign bigger bigger_align
+			-> length smaller_align < length bigger_align.
+	Proof.
+		intros ? ? ? ? extends HS HB;
+		rewrite <- (TotalAlign_same_length HS);
+		rewrite <- (TotalAlign_same_length HB);
+		apply TotalAlign_extends_longer; exact extends.
+	Qed.
+
+	Theorem FrontAlign_extends:
+		forall bigger smaller aligned,
+			list_extends bigger smaller
+			-> FrontAlign bigger aligned
+			-> FrontAlign smaller aligned.
+	Proof.
+		intros ? ? ? [extension [_ HB]] HM;
+		apply (FrontAlign_shorter _ _ HB HM).
+	Qed.
+
+
+
+	Definition TotalAlign_contains bigger smaller :=
+		(forall lu, TotalAlign smaller lu -> TotalAlign bigger lu)
+		/\ exists lu, TotalAlign bigger lu /\ ~(TotalAlign smaller lu).
+	Hint Unfold TotalAlign_contains: core.
+
+	Theorem TotalAlign_extends_equivalent_contains:
+		forall smaller bigger,
+			list_extends smaller bigger <-> TotalAlign_contains smaller bigger.
+	Proof.
+		unfold list_extends in *; unfold TotalAlign_contains in *.
+split.
+
+-
+intros [extension []].
+subst.
+split.
+	Qed.*)
+
+
+
+
+
 (*Theorem ListsMatch_portion_ListsCorrespond:
 	forall lt lu,
 		ListsMatch lt lu

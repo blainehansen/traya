@@ -27,7 +27,7 @@ Proof. crush. Qed.
 	{TotalAlign lt lu} + {~(TotalAlign lt lu)}.
 Obligation Tactic := crush.
 Fixpoint lists_align
-	(aligner: forall t u, {C t u} + {~(C t u)})
+	(aligner: forall t u, {Align t u} + {~(Align t u)})
 	lt lu
 : TotalAlignBool lt lu :=
 	match lt, lu with
@@ -121,39 +121,54 @@ Ltac add_length_cons_equal :=
 			|| specialize (length_cons_equal H) as ?
 	end.
 
-Section ListDivergence.
-	Variable T U: Type.
-	Variable C: T -> U -> Prop.
-
-	Inductive Diverge: list T -> list U -> Prop :=
-		| Diverge_nil: forall (t: T) lt, Diverge (t :: lt) (@nil U)
-	  | Diverge_cons: forall (t: T) (u: U) lt lu,
-	  	~(C t u) -> Diverge (t :: lt) (u :: lu)
-  .
-End ListDivergence.
-Definition EqualityDiverge (T: Type) := (@Diverge T T (fun a b => a = b)).
-
 
 Section ListAlignment.
 	Variable T U: Type.
-	Variable C: T -> U -> Prop.
+	Variable Align: T -> U -> Prop.
+
+	(* definition of Diverge *)
+	Inductive Diverge: list T -> list U -> Prop :=
+		| Diverge_nil: forall (t: T) lt, Diverge (t :: lt) (@nil U)
+		| Diverge_cons: forall (t: T) (u: U) lt lu,
+			~(Align t u) -> Diverge (t :: lt) (u :: lu)
+	.
+
+	(* properties of Diverge *)
+	Theorem Diverge_main_not_empty:
+		forall lt lu, Diverge lt lu -> lt <> [].
+	Proof.
+		intros ? ? HD; inversion HD; crush.
+	Qed.
+
+	Theorem Diverge_head_not_align:
+		forall lt lu, Diverge lt lu
+			-> lu = []
+				\/ exists (Hlt: 0 < length lt) (Hlu: 0 < length lu),
+					~(Align (safe_nth lt Hlt) (safe_nth lu Hlu)).
+	Proof.
+		intros ? ? HD; inversion HD as [| ? ? lt' lu'];
+		try solve [left; reflexivity]; right;
+		exists (Nat.lt_0_succ (length lt')); exists (Nat.lt_0_succ (length lu'));
+		assumption.
+	Qed.
+
 
 	(* definition of TotalAlign *)
 	Inductive TotalAlign: list T -> list U -> Prop :=
 		| TotalAlign_nil: TotalAlign (@nil T) (@nil U)
 		| TotalAlign_cons: forall (t: T) (u: U) lt lu,
-			C t u -> TotalAlign lt lu -> TotalAlign (t :: lt) (u :: lu)
+			Align t u -> TotalAlign lt lu -> TotalAlign (t :: lt) (u :: lu)
 	.
 	Hint Constructors TotalAlign: core.
 
 	(* properties of TotalAlign *)
 	Theorem TotalAlign_contradicts_Diverge:
-		forall lt lu, TotalAlign lt lu -> ~(Diverge C lt lu).
+		forall lt lu, TotalAlign lt lu -> ~(Diverge lt lu).
 	Proof.
 		intros ? ? HA HD; inversion HA; inversion HD; crush.
 	Qed.
 	Theorem Diverge_contradicts_TotalAlign:
-		forall lt lu, Diverge C lt lu -> ~(TotalAlign lt lu).
+		forall lt lu, Diverge lt lu -> ~(TotalAlign lt lu).
 	Proof.
 		intros ? ? ? HA;
 		apply (contrapositive (TotalAlign_contradicts_Diverge HA)); crush.
@@ -194,7 +209,7 @@ Section ListAlignment.
 			TotalAlign lt lu
 			-> n < length lt \/ n < length lu
 			-> exists (Hlt: n < length lt) (Hlu: n < length lu),
-				C (safe_nth lt Hlt) (safe_nth lu Hlu).
+				Align (safe_nth lt Hlt) (safe_nth lu Hlu).
 	Proof.
 		intros ? ? ? HC [Hlt | Hlu];
 		add_TotalAlign_same_length;
@@ -230,11 +245,11 @@ Section ListAlignment.
 			| |- TotalAlign [] [] =>
 				solve [apply TotalAlign_nil]
 			|
-				CTU: C ?t ?u,
+				AlignTU: Align ?t ?u,
 				HC: TotalAlign ?lt ?lu
 				|- TotalAlign (?t :: ?lt) (?u :: ?lu)
 			=>
-				solve [apply (TotalAlign_cons CTU HC)]
+				solve [apply (TotalAlign_cons AlignTU HC)]
 
 			| HL: length (?t :: ?lt) = length [] |- _ =>
 				solve [simpl in HL; discriminate HL]
@@ -262,7 +277,7 @@ Section ListAlignment.
 		end;
 		subst; split; try trivial_TotalAlign;
 		try match goal with
-		| CTU: C ?t ?u |- TotalAlign (?t :: _) (?u :: _) =>
+		| AlignTU: Align ?t ?u |- TotalAlign (?t :: _) (?u :: _) =>
 			apply TotalAlign_cons; try assumption
 		end;
 		match goal with
@@ -304,18 +319,18 @@ Section ListAlignment.
 	Inductive FrontAlign: list T -> list U -> Prop :=
 		| FrontAlign_nil: forall lu, FrontAlign (@nil T) lu
 		| FrontAlign_cons: forall (t: T) (u: U) lt lu,
-			C t u -> FrontAlign lt lu -> FrontAlign (t :: lt) (u :: lu)
+			Align t u -> FrontAlign lt lu -> FrontAlign (t :: lt) (u :: lu)
 	.
 	Hint Constructors FrontAlign: core.
 
 	(* properties of FrontAlign *)
 	Theorem FrontAlign_contradicts_Diverge:
-		forall lt lu, FrontAlign lt lu -> ~(Diverge C lt lu).
+		forall lt lu, FrontAlign lt lu -> ~(Diverge lt lu).
 	Proof.
 		intros ? ? HA HD; inversion HA; inversion HD; crush.
 	Qed.
 	Theorem Diverge_contradicts_FrontAlign:
-		forall lt lu, Diverge C lt lu -> ~(FrontAlign lt lu).
+		forall lt lu, Diverge lt lu -> ~(FrontAlign lt lu).
 	Proof.
 		intros ? ? ? HA;
 		apply (contrapositive (FrontAlign_contradicts_Diverge HA)); crush.
@@ -349,55 +364,6 @@ Section ListAlignment.
 	Qed.
 
 
-	(* properties of prediction or lookahead *)
-(*
-with this concept of divergence, we can finally understand this base layer of basic token lookaheads
-*)
-
-	Inductive PredictsAgainst: list T -> list T -> list T -> Prop :=
-	  | PredictsAgainst_usefully_extends:
-	  	forall lookahead main against extension n rest,
-	  	main = lookahead ++ extension -> extension <> []
-	  	-> against = (firstn n main) ++ rest
-	  	-> EqualityDiverge rest main
-	  	-> PredictsAgainst lookahead main against
-		| PredictsAgainst_contained:
-			forall lookahead main against extension,
-			main = lookahead
-			-> against = main ++ extension,
-			-> PredictsAgainst lookahead main against
-  .
-
-  Theorem PredictsAgainst_predicts_accurately:
-  	forall lookahead main against aligned,
-  		PredictsAgainst lookahead main against
-		  -> (
-		  	(FrontAlign main aligned -> FrontAlign lookahead aligned)
-		  	/\ (FrontAlign lookahead aligned -> ~(FrontAlign against aligned))
-	  	)
-		  	\/ exists , .
-  Proof.
-
-  Qed.
-
-
-	Definition predicts_against (lookahead main against: list T) :=
-		forall aligned,
-			FrontAlign lookahead
-			FrontAlign lookahead aligned -> ~()
-
-		forall lookahead, exists extension, main = lookahead ++ extension
-			/\ ~(exists extension, ).
-
-	Definition  :=
-	  .
-
-	Theorem : .
-	Proof.
-
-	Qed.
-
-
 	(* relationships between TotalAlign and FrontAlign *)
 	Theorem TotalAlign_FrontAlign:
 		forall lt lu, TotalAlign lt lu -> FrontAlign lt lu.
@@ -423,76 +389,250 @@ with this concept of divergence, we can finally understand this base layer of ba
 	Qed.
 
 
+	(* properties of prediction or lookahead *)
+	Definition DivergesAt main against n :=
+		TotalAlign (firstn n main) (firstn n against)
+		/\ Diverge (skipn n main) (skipn n against).
+	Hint Unfold DivergesAt: core.
 
-	(* non-trivial extension *)
-	Definition list_extends bigger smaller :=
-		exists extension: list T, extension <> [] /\ bigger = smaller ++ extension.
-	Hint Unfold list_extends: core.
+	Hint Rewrite skipn_nil: core.
+	Hint Rewrite firstn_nil: core.
+	Hint Rewrite skipn_O: core.
+	Hint Rewrite firstn_O: core.
 
-	Theorem TotalAlign_extends_longer:
-		forall bigger smaller, list_extends bigger smaller
-			-> length smaller < length bigger.
+	Theorem DivergesAt_main_longer:
+		forall main against n,
+			DivergesAt main against n -> n < length main.
 	Proof.
-		intros ? ? [extension []]; subst;
-		induction smaller; destruct extension; crush.
+		intros ?; induction main; intros ? ? [HA HD];
+		destruct against; destruct n; inversion HD; inversion HA;
+		try solve [apply lt_n_S; apply (IHmain against n); crush]; crush.
+	Qed.
+	Theorem DivergesAt_main_not_empty:
+		forall main against n,
+			DivergesAt main against n -> main <> [].
+	Proof.
+		intros ? ? ? [_ HD]; apply Diverge_main_not_empty in HD; crush.
 	Qed.
 
-	Theorem TotalAlign_extends_aligns_longer:
-		forall bigger smaller smaller_align bigger_align,
-			list_extends bigger smaller
-			-> TotalAlign smaller smaller_align
-			-> TotalAlign bigger bigger_align
-			-> length smaller_align < length bigger_align.
+	(*Theorem DivergesAt_contradicts_TotalAlign:
+		forall main against n,
+			DivergesAt main against n -> ~(TotalAlign main against).
 	Proof.
-		intros ? ? ? ? extends HS HB;
-		rewrite <- (TotalAlign_same_length HS);
-		rewrite <- (TotalAlign_same_length HB);
-		apply TotalAlign_extends_longer; exact extends.
+
+	Qed.
+	Theorem TotalAlign_contradicts_DivergesAt:
+		forall main against n,
+			TotalAlign main against -> ~(DivergesAt main against n).
+	Proof.
+
 	Qed.
 
-	Theorem FrontAlign_extends:
-		forall bigger smaller aligned,
-			list_extends bigger smaller
-			-> FrontAlign bigger aligned
-			-> FrontAlign smaller aligned.
+	Theorem DivergesAt_contradicts_FrontAlign:
+		forall main against n,
+			DivergesAt main against n -> ~(FrontAlign main against).
 	Proof.
-		intros ? ? ? [extension [_ HB]] HM;
-		apply (FrontAlign_shorter _ _ HB HM).
+
 	Qed.
-
-
-	(*
-
-	Definition TotalAlign_contains bigger smaller :=
-		(forall lu, TotalAlign smaller lu -> TotalAlign bigger lu)
-		/\ exists lu, TotalAlign bigger lu /\ ~(TotalAlign smaller lu).
-	Hint Unfold TotalAlign_contains: core.
-
-	Theorem TotalAlign_extends_equivalent_contains:
-		forall smaller bigger,
-			list_extends smaller bigger <-> TotalAlign_contains smaller bigger.
+	Theorem FrontAlign_contradicts_DivergesAt:
+		forall main against n,
+			FrontAlign main against -> ~(DivergesAt main against n).
 	Proof.
-		unfold list_extends in *; unfold TotalAlign_contains in *.
-split.
 
--
-intros [extension []].
-subst.
-split.
 	Qed.*)
 
+
+	Definition Extends bigger smaller :=
+		DivergesAt bigger smaller (length smaller).
+	(*Hint Unfold Extends: core.*)
+
+	Theorem Extends_bigger_longer:
+		forall bigger smaller,
+			Extends bigger smaller -> length smaller < length bigger.
+	Proof.
+		intros ? ? HD; apply (DivergesAt_main_longer HD).
+	Qed.
+	(*
+		when Align is equality, Extends implies
+		smaller = (firstn (length smaller) bigger)
+		/\ (skipn (length smaller) bigger) <> []
+	*)
+
+	Definition SomeAlignment main against n :=
+		DivergesAt main against n /\ n <> 0.
+	(*Hint Unfold SomeAlignment: core.*)
+
+	Theorem SomeAlignment_against_not_empty:
+		forall main against n,
+			SomeAlignment main against n -> against <> [].
+	Proof.
+		intros ? ? ? [[HA HD] ?];
+		destruct main; destruct against; destruct n;
+		inversion HD; inversion HA; crush.
+	Qed.
+
+	Definition NoAlignment main against :=
+		DivergesAt main against 0.
+	Hint Unfold NoAlignment: core.
+
+	Theorem NoAlignment_equivalent_Diverge:
+		forall main against,
+			NoAlignment main against <-> Diverge main against.
+	Proof.
+		unfold NoAlignment; unfold DivergesAt; crush.
+	Qed.
+
 End ListAlignment.
+
+Section Lookahead.
+	Variable T U: Type.
+	Variable Equivalent: T -> T -> Prop.
+	Variable Match: T -> U -> Prop.
+	Variable equivalence_implies_match:
+		forall t1 t2, Equivalent t1 t2 <-> (forall u, Match t1 u <-> Match t2 u).
+
+	Definition EqDiverge := (Diverge Equivalent).
+	Definition EqDivergesAt := (DivergesAt Equivalent).
+	Definition EqExtends := (Extends Equivalent).
+	Definition EqSomeAlignment := (SomeAlignment Equivalent).
+	Definition EqTotalAlign := (TotalAlign Equivalent).
+	Definition EqFrontAlign := (FrontAlign Equivalent).
+
+	Definition MatchDiverge := (Diverge Match).
+	Definition MatchDivergesAt := (DivergesAt Match).
+	Definition MatchExtends := (Extends Match).
+	Definition MatchSomeAlignment := (SomeAlignment Match).
+	Definition MatchTotalAlign := (TotalAlign Match).
+	Definition MatchFrontAlign := (FrontAlign Match).
+
+	Theorem Equivalent_TotalAlign:
+		forall lt1 lt2 lu,
+			EqTotalAlign lt1 lt2
+			<-> (MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu).
+	Proof.
+intros.
+split; intros.
+-
+generalize dependent lu.
+induction H; intros; destruct lu; solve_crush.
++
+destruct lt; solve_crush; split; intros.
+inversion H1.
+subst.
+apply TotalAlign_cons; try solve [assumption].
+rename u into t2; rename t into t1; rename u0 into u.
+apply (equivalence_implies_match t1 t2); assumption.
+
+inversion H1.
+subst.
+apply TotalAlign_cons; try solve [assumption].
+rename u into t2; rename t into t1; rename u0 into u.
+apply (equivalence_implies_match t1 t2); assumption.
+
+inversion H0.
+inversion H0.
+
++
+split; intros.
+
+inversion H1.
+subst.
+apply TotalAlign_cons; try solve [assumption].
+rename u into t2; rename t into t1; rename u0 into u.
+apply (equivalence_implies_match t1 t2); assumption.
+
+destruct (IHTotalAlign lu1) as [M _].
+apply M.
+assumption.
+
+destruct (IHTotalAlign lu0) as [M _].
+
+	Qed.
+
+	(*Definition EqualityDiverge (T: Type) := (@Diverge T T (fun a b => a = b)).*)
+	(*Definition DivergesAt main against n :=
+		TotalAlign (firstn n main) (firstn n against)
+		/\ Diverge (skipn n main) (skipn n against).*)
+	Definition PredictsAgainst lookahead main against :=
+		let n := (length lookahead) in
+		lookahead = (firstn n main)
+			/\ EqDivergesAt against lookahead (n - 1)
+				\/ EqExtends against main
+				\/ EqTotalAlign against main.
+
+	(*
+		main: A
+		against: B
+		lookahead: A
+		lookahead = (firstn 1 main)
+		EqDivergesAt :=
+			TotalAlign (firstn 0 against) (firstn 0 lookahead)
+			/\ Diverge (skipn 0 against) (skipn 0 lookahead)
+
+		main: A B C
+		against: A E
+		lookahead: A B
+		lookahead = (firstn 2 main)
+		EqDivergesAt :=
+			TotalAlign (firstn 1 against) (firstn 1 lookahead)
+			/\ Diverge (skipn 1 against) (skipn 1 lookahead)
+
+		main: A B
+		against: A B C
+		lookahead: A B
+		lookahead = (firstn 2 main)
+		EqDivergesAt :=
+			TotalAlign (firstn 1 against) (firstn 1 lookahead)
+			/\ Diverge (skipn 1 against) (skipn 1 lookahead)
+	*)
+
+	Inductive PredictsAgainst: list T -> list T -> list T -> Prop :=
+		| PredictsAgainst_extends:
+			forall lookahead main against extension n rest,
+			main = lookahead ++ extension -> extension <> []
+			-> against = (firstn n main) ++ rest
+			-> EqualityDiverge rest main
+			-> PredictsAgainst lookahead main against
+		| PredictsAgainst_contained:
+			forall lookahead main against extension,
+			main = lookahead
+			-> against = main ++ extension,
+			-> PredictsAgainst lookahead main against
+	.
+
+	Theorem PredictsAgainst_predicts_accurately:
+		forall lookahead main against aligned,
+			PredictsAgainst lookahead main against
+			-> (FrontAlign main aligned -> FrontAlign lookahead aligned)
+				(FrontAlign lookahead aligned -> ~(FrontAlign against aligned))
+				/\ extends against main.
+	Proof.
+
+	Qed.
+
+
+	Definition predicts_against (lookahead main against: list T) :=
+		forall aligned,
+			FrontAlign lookahead
+			FrontAlign lookahead aligned -> ~()
+
+		forall lookahead, exists extension, main = lookahead ++ extension
+			/\ ~(exists extension, ).
+
+
+End Lookahead.
+
 
 
 Section FoldsAlignment.
 	Variable T U: Type.
-	Variable C: T -> list U -> Prop.
+	Variable Align: T -> list U -> Prop.
 
 	(* definition of Foldsalign *)
 	Inductive Foldsalign: list T -> list U -> Prop :=
 		| Foldsalign_nil: Foldsalign (@nil T) (@nil U)
 		| Foldsalign_cons: forall (t: T) (us: list U) lt lu,
-			C t us -> Foldsalign lt lu -> Foldsalign (t :: lt) (us ++ lu)
+			Align t us -> Foldsalign lt lu -> Foldsalign (t :: lt) (us ++ lu)
 	.
 	Hint Constructors Foldsalign: core.
 
@@ -501,7 +641,7 @@ Section FoldsAlignment.
 	Inductive FoldsMatch: list T -> list U -> Prop :=
 		| FoldsMatch_nil: forall lu, FoldsMatch (@nil T) lu
 		| FoldsMatch_cons: forall (t: T) (us: list U) lt lu,
-			C t us -> FoldsMatch lt lu -> FoldsMatch (t :: lt) (us ++ lu)
+			Align t us -> FoldsMatch lt lu -> FoldsMatch (t :: lt) (us ++ lu)
 	.
 	Hint Constructors FoldsMatch: core.
 
