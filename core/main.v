@@ -444,7 +444,6 @@ Section ListAlignment.
 
 	Definition Extends bigger smaller :=
 		DivergesAt bigger smaller (length smaller).
-	(*Hint Unfold Extends: core.*)
 
 	Theorem Extends_bigger_longer:
 		forall bigger smaller,
@@ -460,7 +459,6 @@ Section ListAlignment.
 
 	Definition SomeAlignment main against n :=
 		DivergesAt main against n /\ n <> 0.
-	(*Hint Unfold SomeAlignment: core.*)
 
 	Theorem SomeAlignment_against_not_empty:
 		forall main against n,
@@ -473,7 +471,6 @@ Section ListAlignment.
 
 	Definition NoAlignment main against :=
 		DivergesAt main against 0.
-	Hint Unfold NoAlignment: core.
 
 	Theorem NoAlignment_equivalent_Diverge:
 		forall main against,
@@ -487,7 +484,11 @@ End ListAlignment.
 Section Lookahead.
 	Variable T U: Type.
 	Variable Equivalent: T -> T -> Prop.
+	Variable compute_equivalent:
+		forall t1 t2, {Equivalent t1 t2} + {~(Equivalent t1 t2)}.
 	Variable Match: T -> U -> Prop.
+	Variable compute_match:
+		forall t u, {Match t u} + {~(Match t u)}.
 	Variable equivalence_implies_match:
 		forall t1 t2, Equivalent t1 t2 <-> (forall u, Match t1 u <-> Match t2 u).
 
@@ -505,7 +506,7 @@ Section Lookahead.
 	Definition MatchTotalAlign := (TotalAlign Match).
 	Definition MatchFrontAlign := (FrontAlign Match).
 
-	Theorem Equivalent_TotalAlign:
+	(*Theorem Equivalent_TotalAlign:
 		forall lt1 lt2 lu,
 			EqTotalAlign lt1 lt2
 			<-> (MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu).
@@ -547,7 +548,7 @@ assumption.
 
 destruct (IHTotalAlign lu0) as [M _].
 
-	Qed.
+	Qed.*)
 
 	(*Definition EqualityDiverge (T: Type) := (@Diverge T T (fun a b => a = b)).*)
 	(*Definition DivergesAt main against n :=
@@ -556,9 +557,104 @@ destruct (IHTotalAlign lu0) as [M _].
 	Definition PredictsAgainst lookahead main against :=
 		let n := (length lookahead) in
 		lookahead = (firstn n main)
-			/\ EqDivergesAt against lookahead (n - 1)
-				\/ EqExtends against main
-				\/ EqTotalAlign against main.
+		/\ (
+			EqDivergesAt against lookahead (n - 1)
+			\/ EqExtends against main
+			\/ EqTotalAlign against main
+		).
+
+	Ltac solve_assumption := try solve [assumption].
+
+	Theorem PredictsAgainst_correct:
+		forall lookahead main against matched,
+			PredictsAgainst lookahead main against
+			-> (MatchFrontAlign main matched -> MatchFrontAlign lookahead matched)
+				/\ (
+					(MatchFrontAlign lookahead matched -> ~(MatchFrontAlign against matched))
+					\/ (MatchFrontAlign against matched -> MatchFrontAlign main matched)
+				).
+	Proof.
+intros ? ? ? ? [HL [[HA HD] | [[HA HD] | HA]]]; split; try intros HM.
+
+-
+destruct main;
+destruct against;
+destruct lookahead;
+destruct matched;
+try rewrite -> firstn_nil in *;
+try rewrite -> skipn_nil in *;
+simpl in *;
+try rewrite -> Nat.sub_0_r in *;
+solve_assumption;
+try solve [apply FrontAlign_nil];
+try solve [inversion HM];
+try solve [inversion HD];
+try solve [discriminate HL].
+
+simpl in *.
+inversion HM; subst.
+injection HL; intros.
+subst.
+assert (Hmain: (firstn (length lookahead) main) ++ (skipn (length lookahead) main) = main) by apply firstn_skipn.
+symmetry in Hmain.
+apply FrontAlign_cons; solve_assumption.
+remember (length lookahead) as n.
+rewrite -> H.
+apply (FrontAlign_shorter _ _ Hmain H4).
+
+-
+left; intros HM.
+destruct main;
+destruct against;
+destruct lookahead;
+destruct matched;
+try rewrite -> firstn_nil in *;
+try rewrite -> skipn_nil in *;
+simpl in *;
+try rewrite -> Nat.sub_0_r in *;
+solve_assumption;
+try solve [apply FrontAlign_nil];
+try solve [inversion HM];
+try solve [inversion HD];
+try solve [discriminate HL];
+try solve [apply Diverge_contradicts_FrontAlign; apply Diverge_nil].
+unfold not; intros HMG.
+assert (Hmain: (firstn (length lookahead) main) ++ (skipn (length lookahead) main) = main) by apply firstn_skipn.
+
+admit.
+
+admit.
+
+admit.
+
+
+	Qed.
+
+(*
+Theorem FrontAlign_shorter:
+	forall bigger smaller extension aligned,
+		bigger = smaller ++ extension
+		-> FrontAlign bigger aligned
+		-> FrontAlign smaller aligned.
+*)
+
+	Fixpoint compute_lookahead_recursive main against lookahead :=
+		match main, against with
+		(* EqTotalAlign against main *)
+		| [], [] => lookahead
+		(* EqExtends against main *)
+		| [], (_ :: _) => lookahead
+		(* EqDivergesAt *)
+		| (m :: _), [] => (lookahead ++ [m])
+		| (m :: main'), (a :: against') => if compute_equivalent m a
+			(* recursive *)
+			then compute_lookahead_recursive main' against' (lookahead ++ [m])
+			(* EqDivergesAt *)
+			else (lookahead ++ [m])
+		end.
+
+	Definition compute_lookahead main against :=
+		compute_lookahead_recursive main against [].
 
 	(*
 		main: A
