@@ -100,19 +100,15 @@ Proof.
 Qed.
 
 
-(*firstn_app_2: firstn (length l1 + n) (l1 ++ l2) = l1 ++ firstn n l2*)
 Theorem firstn_length_append:
 	forall T (l1 l2: list T), firstn (length l1) (l1 ++ l2) = l1.
 Proof.
-	intros.
-	replace (length l1) with (length l1 + 0).
-	replace l1 with (l1 ++ (firstn 0 l2)).
-	simpl in *.
-	replace (length (l1 ++ []) + 0) with (length l1 + 0).
-	replace ((l1 ++ []) ++ l2) with (l1 ++ l2).
-	apply (firstn_app_2 0 l1 l2).
-	Hint Rewrite -> app_nil_r.
-	crush. crush. crush. crush.
+	intros; induction l1; crush.
+Qed.
+Theorem skipn_length_append:
+	forall T (l1 l2: list T), skipn (length l1) (l1 ++ l2) = l2.
+Proof.
+	intros; induction l1; crush.
 Qed.
 
 Ltac add_append_length :=
@@ -268,47 +264,49 @@ Section ListAlignment.
 			| H: TotalAlign (?t :: ?lt) [] |- _ => solve [inversion H]
 		end.
 
+	Theorem TotalAlign_firstn:
+		forall n lt lu, TotalAlign lt lu
+			-> TotalAlign (firstn n lt) (firstn n lu).
+	Proof.
+		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
+	Qed.
+	Theorem TotalAlign_skipn:
+		forall n lt lu, TotalAlign lt lu
+			-> TotalAlign (skipn n lt) (skipn n lu).
+	Proof.
+		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
+	Qed.
+	Theorem TotalAlign_split:
+		forall n lt lu, TotalAlign lt lu
+			-> TotalAlign (firstn n lt) (firstn n lu)
+				/\ TotalAlign (skipn n lt) (skipn n lu).
+	Proof.
+		intros ? ? ? H; split;
+		try apply (TotalAlign_firstn n H);
+		try apply (TotalAlign_skipn n H).
+	Qed.
+
 	Theorem TotalAlign_append_split:
 		forall lt_one lu_one lt_two lu_two,
 			TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two)
 			-> length lt_one = length lu_one \/ length lt_two = length lu_two
 			-> TotalAlign lt_one lu_one /\ TotalAlign lt_two lu_two.
 	Proof.
-		intros ?; induction lt_one; intros ? ? ? H [Hlen | Hlen];
-		destruct lt_two; destruct lu_one; destruct lu_two; inversion H;
+		intros ? ? ? ? HA [HL | HL]; split;
+		specialize (TotalAlign_firstn (length lt_one) HA) as H1;
+		specialize (TotalAlign_skipn (length lt_one) HA) as H2;
 		try match goal with
-		|
-			HC: TotalAlign (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two),
-			HL: length ?lt_two = length ?lu_two
+		| HC: TotalAlign _ _, HL: length ?lt_two = length ?lu_two
 		|- _ =>
 			apply (TotalAlign_split_lengths lt_one lu_one lt_two lu_two HC) in HL
 		end;
-		subst; split; try trivial_TotalAlign;
-		try match goal with
-		| AlignTU: Align ?t ?u |- TotalAlign (?t :: _) (?u :: _) =>
-			apply TotalAlign_cons; try assumption
-		end;
-		match goal with
-		| IH: forall lu_one lt_two lu_two,
-				TotalAlign (?lt_one ++ lt_two) (lu_one ++ lu_two)
-				-> length ?lt_one = length lu_one \/ length lt_two = length lu_two
-				-> TotalAlign ?lt_one lu_one /\ TotalAlign lt_two lu_two,
-			HC: TotalAlign (?lt_one ++ ?lt_two) (?lu_one ++ ?lu_two)
-			|- TotalAlign _ _
-		=>
-			apply (IH lu_one lt_two lu_two); crush
-		end.
-	Qed.
-
-	Theorem TotalAlign_split:
-		forall n lt lu, TotalAlign lt lu
-			-> TotalAlign (firstn n lt) (firstn n lu)
-				/\ TotalAlign (skipn n lt) (skipn n lu).
-	Proof.
-		intros ? ? ? H; specialize (TotalAlign_same_length H) as Hlen;
-		rewrite <- (firstn_skipn n lt) in H; rewrite <- (firstn_skipn n lu) in H;
-		apply (TotalAlign_append_split _ _ _ _ H); right;
-		do 2 rewrite -> skipn_length; rewrite Hlen; reflexivity.
+		rewrite -> (firstn_length_append lt_one lt_two) in H1;
+		first [rewrite -> HL in H1 | rewrite <- HL in H1];
+		rewrite -> (firstn_length_append lu_one lu_two) in H1;
+		rewrite -> (skipn_length_append lt_one lt_two) in H2;
+		first [rewrite -> HL in H2 | rewrite <- HL in H2];
+		rewrite -> (skipn_length_append lu_one lu_two) in H2;
+		assumption.
 	Qed.
 
 	Theorem TotalAlign_shorter:
@@ -318,7 +316,7 @@ Section ListAlignment.
 			-> TotalAlign smaller (firstn (length smaller) align).
 	Proof.
 		intros ? ? ? ? ? HC; subst;
-		apply (TotalAlign_split (length smaller)) in HC as [HC _];
+		apply (TotalAlign_firstn (length smaller)) in HC;
 		rewrite -> firstn_length_append in HC; assumption.
 	Qed.
 
@@ -350,6 +348,22 @@ Section ListAlignment.
 		intros ? ? H; induction H; crush.
 	Qed.
 
+	Theorem FrontAlign_firstn_front:
+		forall n lt lu, FrontAlign lt lu -> FrontAlign (firstn n lt) lu.
+	Proof.
+		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
+	Qed.
+	Theorem FrontAlign_firstn:
+		forall n lt lu, FrontAlign lt lu -> FrontAlign (firstn n lt) (firstn n lu).
+	Proof.
+		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
+	Qed.
+	Theorem FrontAlign_skipn:
+		forall n lt lu, FrontAlign lt lu -> FrontAlign (skipn n lt) (skipn n lu).
+	Proof.
+		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
+	Qed.
+
 	Theorem FrontAlign_shorter:
 		forall bigger smaller extension aligned,
 			bigger = smaller ++ extension
@@ -359,21 +373,6 @@ Section ListAlignment.
 		intros ? ? ? ? ? HM; subst; generalize dependent aligned;
 		induction smaller; intros; destruct aligned; inversion HM; crush.
 	Qed.
-
-	Theorem FrontAlign_firstn:
-		forall lt lu n, FrontAlign lt lu -> FrontAlign (firstn n lt) lu.
-	Proof.
-		intros ? ? ? HA; generalize dependent n; induction HA; intros n;
-		destruct n; simpl in *; rewrite_trivial_firstn_skipn; crush.
-	Qed.
-
-	Theorem FrontAlign_skipn:
-		forall lt lu n, FrontAlign lt lu -> FrontAlign (skipn n lt) (skipn n lu).
-	Proof.
-		intros ? ? ? HA; generalize dependent n; induction HA; intros n;
-		destruct n; simpl in *; rewrite_trivial_firstn_skipn; crush.
-	Qed.
-
 	Theorem FrontAlign_shorter_contrapositive:
 		forall bigger smaller extension aligned,
 			bigger = smaller ++ extension
@@ -403,13 +402,23 @@ Section ListAlignment.
 		intros ? ? H ?; induction H; destruct lu; crush.
 	Qed.
 
-	Theorem FrontAlign_firstn_TotalAlign:
+	Theorem FrontAlign_lt_TotalAlign:
 		forall lt lu, FrontAlign lt lu
 			-> TotalAlign lt (firstn (length lt) lu).
 	Proof.
 		intros ? ? H; induction H; crush.
 	Qed.
-
+	Theorem FrontAlign_firstn_TotalAlign:
+		forall n lt lu, FrontAlign lt lu
+			-> n <= length lt
+			-> TotalAlign (firstn n lt) (firstn n lu).
+	Proof.
+		intros ? ? ? HA Hlt; specialize (FrontAlign_le_length HA) as ?;
+		apply (FrontAlign_firstn n) in HA; assert (Hlu: n <= length lu) by crush;
+		specialize (firstn_length_le lt Hlt) as ?; specialize (firstn_length_le lu Hlu) as ?;
+		assert (length (firstn n lt) = length (firstn n lu)) by crush;
+		apply FrontAlign_same_length_TotalAlign; assumption.
+	Qed.
 
 	(* properties of prediction or lookahead *)
 	Definition DivergesAt main against n :=
@@ -442,7 +451,7 @@ Section ListAlignment.
 			TotalAlign main against -> ~(DivergesAt main against n).
 	Proof.
 		intros ? ? ? HA [_ HD];
-		apply (TotalAlign_split n) in HA as [_ HA];
+		apply (TotalAlign_skipn n) in HA;
 		apply (Diverge_contradicts_TotalAlign HD HA).
 	Qed.
 	Theorem DivergesAt_contradicts_TotalAlign:
