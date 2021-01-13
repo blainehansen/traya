@@ -19,6 +19,8 @@ Ltac notHyp P :=
 		end
 	end.
 
+Ltac solve_assumption := try solve [assumption].
+
 Theorem contrapositive: forall P Q: Prop,
 	(P -> Q) -> (~Q -> ~P).
 Proof. crush. Qed.
@@ -68,6 +70,12 @@ firstn_app_2: forall (n) (l1 l2), firstn (length l1 + n) (l1 ++ l2) = l1 ++ firs
 firstn_app: forall (n) (l1 l2), firstn n (l1 ++ l2) = firstn n l1 ++ firstn (n - length l1) l2
 
 *)
+
+Ltac rewrite_trivial_firstn_skipn :=
+	try rewrite -> skipn_nil in *;
+	try rewrite -> firstn_nil in *;
+	try rewrite -> skipn_O in *;
+	try rewrite -> firstn_O in *.
 
 Theorem skipn_n_smaller_not_nil:
 	forall T n (l: list T), n < length l -> skipn n l <> [].
@@ -309,7 +317,7 @@ Section ListAlignment.
 			-> TotalAlign bigger align
 			-> TotalAlign smaller (firstn (length smaller) align).
 	Proof.
-		intros ? ? ? ? Heq HC; subst;
+		intros ? ? ? ? ? HC; subst;
 		apply (TotalAlign_split (length smaller)) in HC as [HC _];
 		rewrite -> firstn_length_append in HC; assumption.
 	Qed.
@@ -350,6 +358,20 @@ Section ListAlignment.
 	Proof.
 		intros ? ? ? ? ? HM; subst; generalize dependent aligned;
 		induction smaller; intros; destruct aligned; inversion HM; crush.
+	Qed.
+
+	Theorem FrontAlign_firstn:
+		forall lt lu n, FrontAlign lt lu -> FrontAlign (firstn n lt) lu.
+	Proof.
+		intros ? ? ? HA; generalize dependent n; induction HA; intros n;
+		destruct n; simpl in *; rewrite_trivial_firstn_skipn; crush.
+	Qed.
+
+	Theorem FrontAlign_skipn:
+		forall lt lu n, FrontAlign lt lu -> FrontAlign (skipn n lt) (skipn n lu).
+	Proof.
+		intros ? ? ? HA; generalize dependent n; induction HA; intros n;
+		destruct n; simpl in *; rewrite_trivial_firstn_skipn; crush.
 	Qed.
 
 	Theorem FrontAlign_shorter_contrapositive:
@@ -415,31 +437,37 @@ Section ListAlignment.
 		intros ? ? ? [_ HD]; apply Diverge_main_not_empty in HD; crush.
 	Qed.
 
-	(*Theorem DivergesAt_contradicts_TotalAlign:
-		forall main against n,
-			DivergesAt main against n -> ~(TotalAlign main against).
-	Proof.
-
-	Qed.
 	Theorem TotalAlign_contradicts_DivergesAt:
 		forall main against n,
 			TotalAlign main against -> ~(DivergesAt main against n).
 	Proof.
-
+		intros ? ? ? HA [_ HD];
+		apply (TotalAlign_split n) in HA as [_ HA];
+		apply (Diverge_contradicts_TotalAlign HD HA).
 	Qed.
-
-	Theorem DivergesAt_contradicts_FrontAlign:
+	Theorem DivergesAt_contradicts_TotalAlign:
 		forall main against n,
-			DivergesAt main against n -> ~(FrontAlign main against).
+			DivergesAt main against n -> ~(TotalAlign main against).
 	Proof.
-
+		intros ? ? ? ? HA;
+		apply (contrapositive (@TotalAlign_contradicts_DivergesAt main against n HA)); crush.
 	Qed.
+
 	Theorem FrontAlign_contradicts_DivergesAt:
 		forall main against n,
 			FrontAlign main against -> ~(DivergesAt main against n).
 	Proof.
-
-	Qed.*)
+		intros ? ? ? HA [_ HD];
+		apply (FrontAlign_skipn n) in HA;
+		apply (FrontAlign_contradicts_Diverge HA HD).
+	Qed.
+	Theorem DivergesAt_contradicts_FrontAlign:
+		forall main against n,
+			DivergesAt main against n -> ~(FrontAlign main against).
+	Proof.
+		intros ? ? ? ? HA;
+		apply (contrapositive (@FrontAlign_contradicts_DivergesAt main against n HA)); crush.
+	Qed.
 
 
 	Definition Extends bigger smaller :=
@@ -563,7 +591,15 @@ destruct (IHTotalAlign lu0) as [M _].
 			\/ EqTotalAlign against main
 		).
 
-	Ltac solve_assumption := try solve [assumption].
+	Theorem PredictsAgainst_correct_EqTotalAlign:
+		forall lookahead main against matched n,
+			(*let n := (length lookahead) in*)
+			-> EqTotalAlign against main
+			-> (MatchFrontAlign main matched -> MatchFrontAlign (firstn n main) matched)
+				/\ (MatchFrontAlign against matched -> MatchFrontAlign main matched).
+	Proof.
+
+	Qed.
 
 	Theorem PredictsAgainst_correct:
 		forall lookahead main against matched,
