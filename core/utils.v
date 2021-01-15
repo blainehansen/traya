@@ -10,7 +10,77 @@ Notation "'Yes'" := (left _ _).
 Notation "'No'" := (right _ _).
 Notation "'Reduce' x" := (if x then Yes else No) (at level 50).
 
+Ltac notHyp P :=
+	match goal with
+	| [ _ : P |- _ ] => fail 1
+	| _ =>
+		match P with
+		| ?P1 /\ ?P2 => first [notHyp P1 | notHyp P2 | fail 2]
+		| _ => idtac
+		end
+	end.
+
 Ltac solve_crush := try solve [crush].
+Ltac solve_assumption := try solve [assumption].
+
+Ltac rewrite_trivial_firstn_skipn :=
+	try rewrite -> skipn_nil in *;
+	try rewrite -> firstn_nil in *;
+	try rewrite -> skipn_O in *;
+	try rewrite -> firstn_O in *.
+
+Theorem skipn_n_smaller_not_nil:
+	forall T n (l: list T), n < length l -> skipn n l <> [].
+Proof.
+	intros ? n; induction n; intros l; induction l; intros; solve_crush;
+	solve [simpl in *; apply IHn; crush].
+Qed.
+
+Theorem skipn_length_smaller_not_nil:
+	forall T (bigger smaller: list T),
+		length smaller < length bigger
+		-> skipn (length smaller) bigger <> [].
+Proof.
+	intros; apply skipn_n_smaller_not_nil; crush.
+Qed.
+
+Theorem length_cons_equal:
+	forall A B a (la: list A) b (lb: list B),
+		length (a :: la) = length (b :: lb) -> length la = length lb.
+Proof.
+	intros; induction la; crush.
+Qed.
+
+
+Theorem firstn_length_append:
+	forall T (l1 l2: list T), firstn (length l1) (l1 ++ l2) = l1.
+Proof.
+	intros; induction l1; crush.
+Qed.
+Theorem skipn_length_append:
+	forall T (l1 l2: list T), skipn (length l1) (l1 ++ l2) = l2.
+Proof.
+	intros; induction l1; crush.
+Qed.
+
+Ltac add_append_length :=
+	repeat match goal with
+	| H: ?l = ?a ++ ?b |- _ =>
+		first [notHyp (length (a ++ b) = length a + length b) | fail 2]
+		|| specialize (app_length a b) as ?
+	end.
+
+Ltac add_length_cons_equal :=
+	repeat match goal with
+		| [ H: length (?t :: ?lt) = length (?u :: ?lu) |- _ ] =>
+			first [notHyp (length lt = length lu) | fail 2]
+			|| specialize (length_cons_equal H) as ?
+	end.
+
+Theorem contrapositive: forall P Q: Prop,
+	(P -> Q) -> (~Q -> ~P).
+Proof. crush. Qed.
+
 
 Section NonEmpty.
 	Variable T: Type.
