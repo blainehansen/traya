@@ -8,6 +8,11 @@ things we want:
 - as much as possible is static, this is a type-safe generator in more ways than one
 - the more flexible and powerful the better
 
+https://tupl.cs.tufts.edu/papers/itp2019_ll1.pdf
+https://en.wikipedia.org/wiki/LL_parser#Constructing_an_LL(k)_parsing_table
+http://www.cs.ecu.edu/karl/5220/spr16/Notes/Top-down/index.html
+https://gallais.github.io/pdf/agdarsec18.pdf
+
 https://www.antlr.org/papers/allstar-techreport.pdf
 Although it sounds nice to have direct left-recursion, the ast structure really ought to have interesting different forms for different constructions.
 
@@ -56,8 +61,8 @@ type JsonObject = { [property: string]: Json }
 type JsonArray = Json[]
 
 const parser = ParserCreator({
-  json(arrayOrObjectOrAtomic): Json {
-    return arrayOrObjectOrAtomic
+  json(primOrObjectOrArray): Json {
+    return primOrObjectOrArray
   },
 
   array(items): JsonArray {
@@ -112,6 +117,9 @@ const errJson = parser.json('5, 4')
 const okPrimitive = parser.primitive('true')
 const errPrimitive = parser.primitive('yoyo')
 
+
+// NOTE: rather than always generating these forms, it's probably a better idea to choose at generation time which variants to produce
+// most people won't use these concrete variants
 
 // includes all tokens and all spans, even ignored ones, represented as tuples (what would we name everything?)
 const okFull = ParserCreator.ConcreteSyntaxTree('null')

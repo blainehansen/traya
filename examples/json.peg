@@ -1,0 +1,24 @@
+:str = '"' ('\\' ["\\] | ^[\n"\\])* '"'
+:num = [0-9]+ ('.' [0-9]+)?
+:atom = 'null' | 'undefined' | 'true' | 'false'
+:comma = ","
+:whitespace _= #whitespace+
+
+json =
+  | array
+  | object
+  | primitive
+
+@manySeparated[$body, $sep] = $body ($sep $body)*
+@separatedByCommas[$def] = @manySeparated[$def, _:comma]
+
+array = "[" @separatedByCommas[json]? "]"
+
+object = "{" @separatedByCommas[key json]? "}"
+
+primitive =
+  | :str
+  | :num
+  | :atom
+
+key = :str ":"

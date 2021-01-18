@@ -1,3 +1,9 @@
+https://xavierleroy.org/publi/validated-parser.pdf
+
+
+
+
+
 // E = (E (* | +))? B
 // B = 0 | 1
 

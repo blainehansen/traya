@@ -1,0 +1,75 @@
+:whitespace _= #whitespace+
+:comment _= '//' '-'? ^[\n]*
+
+bear = entity+
+
+entity =
+	| entity_descriptor '{' bear '}'
+	| '| ' text
+
+entity_descriptor =
+	| tag attributes? '/'?
+	| :plus_identifier attributes?
+	| :at_identifier (:space? '(' paren_code+ ')')?
+
+
+entity =
+	| entity_descriptor (
+		| ':' :space entity
+		| :indent wolf :deindent
+		| ' ' text+
+	)?
+	|
+		'|' (
+			| :indent @lines[text+] :deindent
+			| ' ' text+
+		)
+
+entity_contents =
+	| ':' :space entity
+
+
+tag =
+	| :tag_identifier meta*
+	| meta+
+
+meta =
+	| :id_identifier
+	| :class_identifier
+	| '.' code_segment
+	| '#' code_segment
+
+// the difference between enforcing trailing commas always or never
+// | :indent @lines[attribute_line] :deindent :indent_continue
+attributes =
+	'('
+	| :indent @lines[attribute_line :comma] :deindent :indent_continue
+	| :space? attribute_line :space?
+	')'
+
+attribute_line = attribute (:comma attribute)*
+
+attribute =
+	:attribute_name
+	?
+		:equals
+		| :identifier
+		| str
+		| code_segment
+
+str = :str
+
+code_segment = '{' code* '}'
+
+code =
+	| code_segment
+	| :str
+	| :not_bracket
+
+paren_code =
+	| '(' paren_code* ')'
+	| :not_paren
+
+text =
+	| '{{' code* '}}'
+	| :not_double_bracket

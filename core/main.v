@@ -37,32 +37,75 @@ Section Lookahead.
 	Definition MatchFrontAlign := (FrontAlign Match).
 
 	Theorem Equivalent_TotalAlign:
-		forall lt1 lt2 lu,
+		forall lt1 lt2,
 			EqTotalAlign lt1 lt2
-			-> (MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu).
+			-> (forall lu, MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu).
 	Proof.
-		intros ? ? ? HEA; split; generalize dependent lu;
+		intros ? ? HEA; split; generalize dependent lu;
 		induction HEA as [| t1 t2]; intros [| u] HMA;
 		inversion HMA; try solve [constructor];
 		specialize (equivalence_implies_match t1 t2) as [HM _];
 		specialize (HM H u) as [];
-		match goal with
-		| HM: Match ?t u, HM': Match ?t u -> Match _ u |- _ =>
-			apply HM' in HM; apply TotalAlign_cons; solve_assumption;
+		lazymatch goal with
+		| M: Match ?t1 u, H: Match ?t1 u -> Match ?t2 u
+		|- MatchTotalAlign (?t2 :: _) _ =>
+			specialize (H M) as ?; apply TotalAlign_cons; solve_assumption;
 			apply IHHEA; assumption
 		end.
 	Qed.
 
-	Theorem TotalAlign_Equivalent:
+	(*Theorem TotalAlign_Equivalent:
 		forall lt1 lt2 lu,
-			(MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu)
+			MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu
+			-> (MatchTotalAlign lt1 lu \/ MatchTotalAlign lt2 lu)
 			-> EqTotalAlign lt1 lt2.
 	Proof.
+clear compute_equivalent; clear compute_match;
+intros ? ? ? [HE1 HE2] [HA1 | HA2].
+try specialize (HE1 HA1) as HA2.
+try specialize (HE2 HA2) as HA1.
+clear HE1; clear HE2.
+generalize dependent lt2; generalize dependent lt1;
+induction lu as [| u lu]; intros;
+destruct lt1 as [| t1 lt1]; destruct lt2 as [| t2 lt2];
+inversion HA1; inversion HA2;
+try solve [constructor]; subst.
+apply TotalAlign_cons.
+apply equivalence_implies_match.
+
+admit.
+
+
+
+
+try solve [specialize (TotalAlign_nil Match) as F; apply H in F; inversion F]
+
 intros ?; induction lt1 as [| t1 lt1];
-intros ?; induction lt2 as [| t2 lt2];
-intros [| u lu] H; try solve [constructor];
-try solve [specialize (TotalAlign_nil Match) as F; apply H in F; inversion F];
+intros ?; destruct lt2 as [| t2 lt2];
+intros H;
 subst.
+apply TotalAlign_cons.
+apply equivalence_implies_match.
+intros ?.
+let lu' := fresh "lu'" in
+evar (lu: list U).
+
+let lu' := eval unfold lu in lu in
+clear lu; specialize (H (u :: lu')) as [].
+
+specialize (IHlt1 lt2 lu).
+split.
+
+split; intros.
+admit.
+admit.
+
+apply IHlt1.
+split; intros.
+
+
+
+
 specialize (TotalAlign_nil Match) as F.
 specialize (IHlt2 []) as B.
 admit.
@@ -78,7 +121,6 @@ generalize dependent lu.
 
 induction HA1 as [| t1 ? lt1']; inversion HA2 as [| t2 ? lt2'];
 try solve [constructor]; solve_crush; subst.
-(*injection H6; intros; subst.*)
 apply TotalAlign_cons.
 apply equivalence_implies_match.
 admit.
@@ -89,11 +131,7 @@ split; intros.
 
 specialize (equivalence_implies_match t1 t2) as [_ HM].
 apply HM.
-
-
-
-
-	Qed.
+	Qed.*)
 
 	Theorem Equivalent_FrontAlign:
 		forall lt1 lt2 lu,
