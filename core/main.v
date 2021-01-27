@@ -21,6 +21,8 @@ Section Lookahead.
 		forall t u, {Match t u} + {~(Match t u)}.
 	Variable equivalence_implies_match:
 		forall t1 t2, Equivalent t1 t2 <-> (forall u, Match t1 u <-> Match t2 u).
+	Variable match_requires_equivalance:
+		forall t1 t2 u, Match t1 u -> Match t2 u -> Equivalent t1 t2.
 
 	Definition EqDiverge := (Diverge Equivalent).
 	Definition EqDivergesAt := (DivergesAt Equivalent).
@@ -36,103 +38,6 @@ Section Lookahead.
 	Definition MatchTotalAlign := (TotalAlign Match).
 	Definition MatchFrontAlign := (FrontAlign Match).
 
-	Theorem Equivalent_TotalAlign:
-		forall lt1 lt2,
-			EqTotalAlign lt1 lt2
-			-> (forall lu, MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu).
-	Proof.
-		intros ? ? HEA; split; generalize dependent lu;
-		induction HEA as [| t1 t2]; intros [| u] HMA;
-		inversion HMA; try solve [constructor];
-		specialize (equivalence_implies_match t1 t2) as [HM _];
-		specialize (HM H u) as [];
-		lazymatch goal with
-		| M: Match ?t1 u, H: Match ?t1 u -> Match ?t2 u
-		|- MatchTotalAlign (?t2 :: _) _ =>
-			specialize (H M) as ?; apply TotalAlign_cons; solve_assumption;
-			apply IHHEA; assumption
-		end.
-	Qed.
-
-	(*Theorem TotalAlign_Equivalent:
-		forall lt1 lt2 lu,
-			MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu
-			-> (MatchTotalAlign lt1 lu \/ MatchTotalAlign lt2 lu)
-			-> EqTotalAlign lt1 lt2.
-	Proof.
-clear compute_equivalent; clear compute_match;
-intros ? ? ? [HE1 HE2] [HA1 | HA2].
-try specialize (HE1 HA1) as HA2.
-try specialize (HE2 HA2) as HA1.
-clear HE1; clear HE2.
-generalize dependent lt2; generalize dependent lt1;
-induction lu as [| u lu]; intros;
-destruct lt1 as [| t1 lt1]; destruct lt2 as [| t2 lt2];
-inversion HA1; inversion HA2;
-try solve [constructor]; subst.
-apply TotalAlign_cons.
-apply equivalence_implies_match.
-
-admit.
-
-
-
-
-try solve [specialize (TotalAlign_nil Match) as F; apply H in F; inversion F]
-
-intros ?; induction lt1 as [| t1 lt1];
-intros ?; destruct lt2 as [| t2 lt2];
-intros H;
-subst.
-apply TotalAlign_cons.
-apply equivalence_implies_match.
-intros ?.
-let lu' := fresh "lu'" in
-evar (lu: list U).
-
-let lu' := eval unfold lu in lu in
-clear lu; specialize (H (u :: lu')) as [].
-
-specialize (IHlt1 lt2 lu).
-split.
-
-split; intros.
-admit.
-admit.
-
-apply IHlt1.
-split; intros.
-
-
-
-
-specialize (TotalAlign_nil Match) as F.
-specialize (IHlt2 []) as B.
-admit.
-admit.
-
-apply F in H.
-
-
-
-intros ? ? ? [HA1 HA2].
-generalize dependent lu.
-
-
-induction HA1 as [| t1 ? lt1']; inversion HA2 as [| t2 ? lt2'];
-try solve [constructor]; solve_crush; subst.
-apply TotalAlign_cons.
-apply equivalence_implies_match.
-admit.
-
-
-split; intros.
-
-
-specialize (equivalence_implies_match t1 t2) as [_ HM].
-apply HM.
-	Qed.*)
-
 	Theorem Equivalent_FrontAlign:
 		forall lt1 lt2 lu,
 			EqTotalAlign lt1 lt2
@@ -141,7 +46,7 @@ apply HM.
 		intros ? ? ? HEA; split; generalize dependent lu;
 		induction HEA as [| t1 t2]; intros [| u] HMA;
 		inversion HMA; try solve [constructor];
-		specialize (equivalence_implies_match t1 t2 ) as [HM _];
+		specialize (equivalence_implies_match t1 t2) as [HM _];
 		specialize (HM H u) as [];
 		match goal with
 		| HM: Match ?t u, HM': Match ?t u -> Match _ u |- _ =>
@@ -151,14 +56,13 @@ apply HM.
 	Qed.
 
 	(*Definition EqualityDiverge (T: Type) := (@Diverge T T (fun a b => a = b)).*)
-	(*Definition DivergesAt main against n :=
-		TotalAlign (firstn n main) (firstn n against)
-		/\ Diverge (skipn n main) (skipn n against).*)
 	Definition PredictsAgainst lookahead main against :=
+		(*main <> []*)
+		(*-> exists rest, main = lookahead ++ rest*)
 		let n := (length lookahead) in
 		lookahead = (firstn n main)
 		/\ (
-			EqDivergesAt against lookahead (n - 1)
+			(0 < n /\ EqDivergesAt against lookahead (n - 1))
 			\/ EqExtends against main
 			\/ EqTotalAlign against main
 		).
@@ -193,41 +97,56 @@ apply HM.
 		apply (FrontAlign_firstn_front (length main) HFA).
 	Qed.
 
+	Theorem DivergesAt_Transfer:
+		forall n lookahead against matched,
+			MatchFrontAlign lookahead matched
+			-> MatchFrontAlign against matched
+			-> n < length lookahead
+			-> ~(EqDivergesAt against lookahead n).
+	Proof.
+intros ?; induction n; intros ? ?.
+
+intros ? HFAlm HFAam HL [HTA HD];
+do 2 rewrite -> skipn_O in *; do 2 rewrite -> firstn_O in *;
+inversion HD. rewrite <- H0 in HL; simpl in HL; inversion HL.
+
+inversion HFAlm; inversion HFAam; solve_crush; subst.
+clear HL.
+injection H8; injection H4; injection H9; intros; subst;
+clear H8; clear H4; clear H9; rename t into t1; rename u into t2; rename u0 into u; rename lt into lt1; rename lu into lt2; rename lu0 into lu.
+
+specialize (match_requires_equivalance H6 H2) as HE.
+apply H in HE; assumption.
+
+intros ? HFAlm HFAam HL [HTA HD].
+inversion HFAlm; inversion HFAam; solve_crush; subst.
+try solve [inversion HD].
+injection H6; intros; subst; clear H6.
+simpl in *.
+rename lt into lookahead.
+rename lt0 into against.
+rename lu into matched.
+apply lt_S_n in HL.
+apply (IHn lookahead against matched); solve_assumption.
+unfold EqDivergesAt; unfold DivergesAt; split; solve_assumption.
+inversion HTA; solve_assumption.
+	Qed.
+
 	Theorem PredictsAgainst_correct_EqDivergesAt:
 		forall lookahead main against matched,
 			let n := (length lookahead) in
 			lookahead = (firstn n main)
+			-> 0 < n
 			-> EqDivergesAt against lookahead (n - 1)
 			-> (MatchFrontAlign main matched -> MatchFrontAlign lookahead matched)
 				/\ (MatchFrontAlign lookahead matched -> ~(MatchFrontAlign against matched)).
 	Proof.
-clear compute_equivalent; clear compute_match;
-(*intros ? ? ? ? ? HL [HA HD]; split; intros HFAlm; lookahead_matches HL.*)
-intros ? ? ? ? ? HL Hdiv; split; intros HFAlm; lookahead_matches HL.
+intros ? ? ? ? ? HL Hn Hdiv; split; intros HFAlm; lookahead_matches HL.
 intros HFAam.
-apply (DivergesAt_contradicts_FrontAlign Hdiv).
-destruct Hdiv as [HA HD].
-
-specialize (Equivalent_FrontAlign matched HA) as [H1 H2].
-
-apply (FrontAlign_skipn (n - 1)) in HFAlm.
-
-(**)
-
-
-
-
-
-
-remember (firstn (n - 1) against) as front_against;
-remember (firstn (n - 1) lookahead) as front_lookahead;
-remember (skipn (n - 1) against) as back_against;
-remember (skipn (n - 1) lookahead) as back_lookahead.
-
-
-apply DivergesAt_contradicts_FrontAlign.
-
-(*rewrite -> HL in *.*)
+assert (H: n - 1 < length lookahead).
+apply Nat.sub_lt; try solve [constructor];
+destruct main; solve_crush.
+apply (DivergesAt_Transfer HFAlm HFAam H Hdiv).
 	Qed.
 
 	Theorem PredictsAgainst_correct:
@@ -239,69 +158,22 @@ apply DivergesAt_contradicts_FrontAlign.
 					\/ (MatchFrontAlign against matched -> MatchFrontAlign main matched)
 				).
 	Proof.
-intros ? ? ? ? [HL [[HA HD] | [[HA HD] | HA]]]; split; try intros HM.
-
--
-destruct main;
-destruct against;
-destruct lookahead;
-destruct matched;
-try rewrite -> firstn_nil in *;
-try rewrite -> skipn_nil in *;
-simpl in *;
-try rewrite -> Nat.sub_0_r in *;
-solve_assumption;
-try solve [apply FrontAlign_nil];
-try solve [inversion HM];
-try solve [inversion HD];
-try solve [discriminate HL].
-
-simpl in *.
-inversion HM; subst.
-injection HL; intros.
-subst.
-assert (Hmain: (firstn (length lookahead) main) ++ (skipn (length lookahead) main) = main) by apply firstn_skipn.
-symmetry in Hmain.
-apply FrontAlign_cons; solve_assumption.
-remember (length lookahead) as n.
-rewrite -> H.
-apply (FrontAlign_shorter _ _ Hmain H4).
-
--
-left; intros HM.
-destruct main;
-destruct against;
-destruct lookahead;
-destruct matched;
-try rewrite -> firstn_nil in *;
-try rewrite -> skipn_nil in *;
-simpl in *;
-try rewrite -> Nat.sub_0_r in *;
-solve_assumption;
-try solve [apply FrontAlign_nil];
-try solve [inversion HM];
-try solve [inversion HD];
-try solve [discriminate HL];
-try solve [apply Diverge_contradicts_FrontAlign; apply Diverge_nil].
-unfold not; intros HMG.
-assert (Hmain: (firstn (length lookahead) main) ++ (skipn (length lookahead) main) = main) by apply firstn_skipn.
-
-admit.
-
-admit.
-
-admit.
-
-
+		intros ? ? ? ? [HL [[Hn H] | [H | H]]];
+		try solve [
+			specialize (
+				PredictsAgainst_correct_EqDivergesAt main matched HL Hn H
+			) as HF; split; first [apply HF | left; apply HF]
+		];
+		try solve [
+			specialize (PredictsAgainst_correct_EqExtends matched HL H) as HF;
+			split; first [apply HF | right; apply HF]
+		];
+		try solve [
+			specialize (PredictsAgainst_correct_EqTotalAlign matched HL H) as HF;
+			split; first [apply HF | right; apply HF]
+		].
 	Qed.
 
-(*
-Theorem FrontAlign_shorter:
-	forall bigger smaller extension aligned,
-		bigger = smaller ++ extension
-		-> FrontAlign bigger aligned
-		-> FrontAlign smaller aligned.
-*)
 
 	Fixpoint compute_lookahead_recursive main against lookahead :=
 		match main, against with
@@ -309,7 +181,7 @@ Theorem FrontAlign_shorter:
 		| [], [] => lookahead
 		(* EqExtends against main *)
 		| [], (_ :: _) => lookahead
-		(* EqDivergesAt *)
+		(* EqDivergesAt against lookahead (n - 1) *)
 		| (m :: _), [] => (lookahead ++ [m])
 		| (m :: main'), (a :: against') => if compute_equivalent m a
 			(* recursive *)
@@ -318,8 +190,60 @@ Theorem FrontAlign_shorter:
 			else (lookahead ++ [m])
 		end.
 
+	Theorem compute_lookahead_recursive_correct:
+		forall main against before_look lookahead,
+			lookahead = compute_lookahead_recursive main against before_look
+			-> length before_look <= length main
+			-> PredictsAgainst lookahead main against.
+	Proof.
+intros ? ? ? ? HC HL; split.
+destruct main as [| m main']; destruct against as [| a against'];
+unfold compute_lookahead_recursive in HC; rewrite_trivial_firstn_skipn.
+destruct before_look; crush.
+destruct before_look; crush.
+destruct before_look; simpl in *; subst; simpl in *.
+reflexivity.
+
+admit.
+simpl in *.
+destruct (compute_equivalent m a).
+
+
+
+split.
+
+
+	Qed.
+
 	Definition compute_lookahead main against :=
 		compute_lookahead_recursive main against [].
+
+	Theorem compute_lookahead_correct:
+		forall main against lookahead,
+			main <> [] -> against <> []
+			-> lookahead = compute_lookahead main against
+			-> PredictsAgainst lookahead main against.
+	Proof.
+intros ?; induction main as [| m main'];
+intros ? ? Hmain Hagainst Hlookahead;
+destruct against as [| a against'];
+try contradiction.
+unfold PredictsAgainst; unfold compute_lookahead in Hlookahead;
+clear Hmain; clear Hagainst; split.
+-
+unfold compute_lookahead_recursive in Hlookahead.
+destruct (compute_equivalent m a).
++
+simpl.
+
+
++
+
+
+-
+
+
+	Qed.
 
 	(*
 		main: A
@@ -347,41 +271,42 @@ Theorem FrontAlign_shorter:
 			/\ Diverge (skipn 1 against) (skipn 1 lookahead)
 	*)
 
-	Inductive PredictsAgainst: list T -> list T -> list T -> Prop :=
-		| PredictsAgainst_extends:
-			forall lookahead main against extension n rest,
-			main = lookahead ++ extension -> extension <> []
-			-> against = (firstn n main) ++ rest
-			-> EqualityDiverge rest main
-			-> PredictsAgainst lookahead main against
-		| PredictsAgainst_contained:
-			forall lookahead main against extension,
-			main = lookahead
-			-> against = main ++ extension,
-			-> PredictsAgainst lookahead main against
-	.
-
-	Theorem PredictsAgainst_predicts_accurately:
-		forall lookahead main against aligned,
-			PredictsAgainst lookahead main against
-			-> (FrontAlign main aligned -> FrontAlign lookahead aligned)
-				(FrontAlign lookahead aligned -> ~(FrontAlign against aligned))
-				/\ extends against main.
-	Proof.
-
-	Qed.
-
-
-	Definition predicts_against (lookahead main against: list T) :=
-		forall aligned,
-			FrontAlign lookahead
-			FrontAlign lookahead aligned -> ~()
-
-		forall lookahead, exists extension, main = lookahead ++ extension
-			/\ ~(exists extension, ).
-
-
 End Lookahead.
+
+
+(*Theorem Equivalent_TotalAlign:
+	forall lt1 lt2,
+		EqTotalAlign lt1 lt2
+		-> (forall lu, MatchTotalAlign lt1 lu <-> MatchTotalAlign lt2 lu).
+Proof.
+	intros ? ? HEA; split; generalize dependent lu;
+	induction HEA as [| t1 t2]; intros [| u] HMA;
+	inversion HMA; try solve [constructor];
+	specialize (equivalence_implies_match t1 t2) as [HM _];
+	specialize (HM H u) as [];
+	match goal with
+	| M: Match ?t1 u, H: Match ?t1 u -> Match ?t2 u
+	|- MatchTotalAlign (?t2 :: _) _ =>
+		specialize (H M) as ?; apply TotalAlign_cons; solve_assumption;
+		apply IHHEA; assumption
+	end.
+Qed.
+Theorem TotalAlign_Equivalent:
+	forall lu lt1 lt2,
+		MatchTotalAlign lt1 lu
+		-> MatchTotalAlign lt2 lu
+		-> EqTotalAlign lt1 lt2.
+Proof.
+	intros ?; induction lu as [| u]; intros ? ? HE1 HE2;
+	inversion HE1; inversion HE2;
+	try solve [constructor]; try solve [discriminate];
+	subst; apply TotalAlign_cons;
+	try match goal with
+	| M1: Match ?t1 u, M2: Match ?t2 u |- _ =>
+		apply (match_requires_equivalance M1 M2)
+	end;
+	apply IHlu; assumption.
+Qed.*)
 
 
 
