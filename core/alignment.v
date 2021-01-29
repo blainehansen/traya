@@ -46,9 +46,6 @@ firstn_cons: forall (n) (a: A) (l), firstn (S n) (a :: l) = a :: firstn n l
 firstn_skipn_comm: forall (m n) (l), firstn m (skipn n l) = skipn n (firstn (n + m) l)
 skipn_firstn_comm: forall (m n) (l), skipn m (firstn n l) = firstn (n - m) (skipn m l)
 firstn_removelast: forall [n] (l), n < length l -> firstn n (removelast l) = firstn n l
-combine_firstn_r: forall [A B: Type] (l) (l': list B), combine l l' = combine (firstn (length l') l) l'
-combine_firstn_l: forall [A B: Type] (l) (l': list B), combine l l' = combine l (firstn (length l) l')
-removelast_firstn: forall [n] (l), n < length l -> removelast (firstn (S n) l) = firstn n l
 firstn_app_2: forall (n) (l1 l2), firstn (length l1 + n) (l1 ++ l2) = l1 ++ firstn n l2
 firstn_app: forall (n) (l1 l2), firstn n (l1 ++ l2) = firstn n l1 ++ firstn (n - length l1) l2
 

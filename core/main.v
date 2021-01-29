@@ -62,7 +62,7 @@ Section Lookahead.
 		let n := (length lookahead) in
 		lookahead = (firstn n main)
 		/\ (
-			(0 < n /\ EqDivergesAt against lookahead (n - 1))
+			(0 < n /\ EqDivergesAt lookahead against (n - 1))
 			\/ EqExtends against main
 			\/ EqTotalAlign against main
 		).
@@ -97,23 +97,27 @@ Section Lookahead.
 		apply (FrontAlign_firstn_front (length main) HFA).
 	Qed.
 
-	Theorem DivergesAt_Transfer:
+	(*Theorem DivergesAt_Transfer:
 		forall n lookahead against matched,
 			MatchFrontAlign lookahead matched
 			-> MatchFrontAlign against matched
 			-> n < length lookahead
-			-> ~(EqDivergesAt against lookahead n).
+			-> ~(EqDivergesAt lookahead against n).
 	Proof.
 intros ?; induction n; intros ? ?.
 
 intros ? HFAlm HFAam HL [HTA HD];
 do 2 rewrite -> skipn_O in *; do 2 rewrite -> firstn_O in *;
-inversion HD. rewrite <- H0 in HL; simpl in HL; inversion HL.
+inversion HD.
 
 inversion HFAlm; inversion HFAam; solve_crush; subst.
 clear HL.
+injection H3; intros; subst; clear H3.
+
 injection H8; injection H4; injection H9; intros; subst;
 clear H8; clear H4; clear H9; rename t into t1; rename u into t2; rename u0 into u; rename lt into lt1; rename lu into lt2; rename lu0 into lu.
+
+rewrite <- H0 in HL; simpl in HL; inversion HL.
 
 specialize (match_requires_equivalance H6 H2) as HE.
 apply H in HE; assumption.
@@ -130,23 +134,99 @@ apply lt_S_n in HL.
 apply (IHn lookahead against matched); solve_assumption.
 unfold EqDivergesAt; unfold DivergesAt; split; solve_assumption.
 inversion HTA; solve_assumption.
+	Qed.*)
+
+	Theorem firstn_cons_nil:
+		forall n (a: T) l l', a :: l' = firstn n l -> l <> [].
+	Proof.
+		intros; destruct l; rewrite_trivial_firstn_skipn; crush.
 	Qed.
+
+	Theorem skipn_cons_nil:
+		forall n (a: T) l l', a :: l' = skipn n l -> l <> [].
+	Proof.
+		intros; destruct l; rewrite_trivial_firstn_skipn; crush.
+	Qed.
+
+	Ltac subst_injection H :=
+		injection H; intros; subst; clear H.
+
+	Theorem firstn_length_cons:
+		forall l (a: T),
+			0 < length l
+			-> firstn (length l) (a :: l) = a :: (firstn (length l - 1) l).
+	Proof.
+		intros; destruct l; simpl in *;
+		try solve [inversion H]; rewrite -> Nat.sub_0_r; reflexivity.
+	Qed.
+
+	Theorem firstn_nil_cases:
+		forall n (l: list T), [] = firstn n l
+			-> n = 0 \/ l = [].
+	Proof.
+		intros [] []; crush.
+	Qed.
+
 
 	Theorem PredictsAgainst_correct_EqDivergesAt:
 		forall lookahead main against matched,
 			let n := (length lookahead) in
 			lookahead = (firstn n main)
 			-> 0 < n
-			-> EqDivergesAt against lookahead (n - 1)
+			-> EqDivergesAt lookahead against (n - 1)
 			-> (MatchFrontAlign main matched -> MatchFrontAlign lookahead matched)
-				/\ (MatchFrontAlign lookahead matched -> ~(MatchFrontAlign against matched)).
+				/\ (
+					(MatchFrontAlign lookahead matched -> ~(MatchFrontAlign against matched))
+					\/ (MatchFrontAlign against matched -> MatchFrontAlign main matched)
+				).
 	Proof.
-intros ? ? ? ? ? HL Hn Hdiv; split; intros HFAlm; lookahead_matches HL.
-intros HFAam.
-assert (H: n - 1 < length lookahead).
-apply Nat.sub_lt; try solve [constructor];
-destruct main; solve_crush.
-apply (DivergesAt_Transfer HFAlm HFAam H Hdiv).
+(*intros ? ?; generalize dependent lookahead;
+induction main as [| m main']; intros ? ? ? ? HL Hn [HTA HD];*)
+
+intros ? ? ? ? ? HL Hn [HTA HD];
+split; lookahead_matches HL.
+destruct main as [| m main'];
+destruct against as [| a against'];
+destruct matched as [| u lu];
+destruct lookahead as [| l lookahead'];
+try solve [right; intros; constructor];
+try solve [subst n; simpl in Hn; inversion Hn];
+try solve [right; intros H; inversion H].
+rewrite_trivial_firstn_skipn.
+
+inversion HTA;
+simpl in n; subst n; simpl in *; rewrite -> Nat.sub_0_r in *;
+subst_injection HL;
+specialize (firstn_nil_cases _ _ H0) as [Hblah | Hblah];
+try solve [discriminate Hblah];
+rewrite -> Hblah in *; rewrite_trivial_firstn_skipn;
+left; intros; inversion H1.
+
+inversion HTA;
+simpl in n; subst n; simpl in *; rewrite -> Nat.sub_0_r in *;
+subst_injection HL;
+try solve [rewrite_trivial_firstn_skipn; inversion H0];
+specialize (firstn_nil_cases _ _ H0) as [Hblah | Hblah];
+try solve [discriminate Hblah];
+rewrite -> Hblah in *; rewrite_trivial_firstn_skipn.
+admit.
+
+inversion HD;
+simpl in n; subst n; simpl in *; rewrite -> Nat.sub_0_r in *;
+subst_injection HL.
+right; intros HFAam.
+inversion HTA; inversion HFAam; subst.
+
+specialize (firstn_nil_cases _ _ H3) as [Hblah | Hblah];
+solve_crush;
+rewrite -> Hblah in *; do 2 rewrite_trivial_firstn_skipn; subst;
+discriminate H.
+
+
+rewrite -> Nat.sub_0_r in *;
+rewrite_trivial_firstn_skipn.
+admit.
+
 	Qed.
 
 	Theorem PredictsAgainst_correct:
@@ -175,20 +255,60 @@ apply (DivergesAt_Transfer HFAlm HFAam H Hdiv).
 	Qed.
 
 
-	Fixpoint compute_lookahead_recursive main against lookahead :=
+	Fixpoint compute_lookahead main against :=
 		match main, against with
 		(* EqTotalAlign against main *)
-		| [], [] => lookahead
+		| [], [] => []
 		(* EqExtends against main *)
-		| [], (_ :: _) => lookahead
-		(* EqDivergesAt against lookahead (n - 1) *)
-		| (m :: _), [] => (lookahead ++ [m])
+		| [], (_ :: _) => []
+		(* EqDivergesAt lookahead against (n - 1) *)
+		| (m :: _), [] => [m]
 		| (m :: main'), (a :: against') => if compute_equivalent m a
 			(* recursive *)
-			then compute_lookahead_recursive main' against' (lookahead ++ [m])
+			then m :: compute_lookahead main' against'
 			(* EqDivergesAt *)
-			else (lookahead ++ [m])
+			else [m]
 		end.
+
+		Theorem compute_lookahead_correct:
+			forall main against lookahead,
+				lookahead = compute_lookahead main against
+				-> PredictsAgainst lookahead main against.
+		Proof.
+intros ?; induction main as [| m main'];
+intros ? ? HL; destruct against as [| a against'];
+split; simpl in *;
+try solve [rewrite -> HL; reflexivity];
+try solve [right; right; constructor];
+try solve [
+	right; left;
+	unfold EqExtends; unfold Extends; unfold DivergesAt;
+	rewrite_trivial_firstn_skipn; split; constructor
+].
+-
+left.
+
+specialize (IHmain [] [a]).
+simpl in IHmain.
+
+apply IHmain.
+
+right; left.
+
+
+left; split; rewrite -> HL; simpl; constructor.
+rewrite_trivial_firstn_skipn; constructor.
+rewrite_trivial_firstn_skipn.
+
+
+try solve [; constructor].
+
+
+
+split.
+
+		Qed.
+
 
 	Theorem compute_lookahead_recursive_correct:
 		forall main against before_look lookahead,
