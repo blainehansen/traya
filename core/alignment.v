@@ -64,7 +64,7 @@ Section ListAlignment.
 	.
 
 	(* properties of Diverge *)
-	Theorem Diverge_main_not_empty:
+	Theorem Diverge_divergent_not_empty:
 		forall lt lu, Diverge lt lu -> lt <> [].
 	Proof.
 		intros ? ? HD; inversion HD; crush.
@@ -347,9 +347,9 @@ Section ListAlignment.
 	Qed.
 
 	(* properties of prediction or lookahead *)
-	Definition DivergesAt main against n :=
-		TotalAlign (firstn n main) (firstn n against)
-		/\ Diverge (skipn n main) (skipn n against).
+	Definition DivergesAt divergent against n :=
+		TotalAlign (firstn n divergent) (firstn n against)
+		/\ Diverge (skipn n divergent) (skipn n against).
 	Hint Unfold DivergesAt: core.
 
 	Hint Rewrite skipn_nil: core.
@@ -357,51 +357,51 @@ Section ListAlignment.
 	Hint Rewrite skipn_O: core.
 	Hint Rewrite firstn_O: core.
 
-	Theorem DivergesAt_main_longer:
-		forall main against n,
-			DivergesAt main against n -> n < length main.
+	Theorem DivergesAt_divergent_longer:
+		forall divergent against n,
+			DivergesAt divergent against n -> n < length divergent.
 	Proof.
-		intros ?; induction main; intros ? ? [HA HD];
+		intros ?; induction divergent; intros ? ? [HA HD];
 		destruct against; destruct n; inversion HD; inversion HA;
-		try solve [apply lt_n_S; apply (IHmain against n); crush]; crush.
+		try solve [apply lt_n_S; apply (IHdivergent against n); crush]; crush.
 	Qed.
-	Theorem DivergesAt_main_not_empty:
-		forall main against n,
-			DivergesAt main against n -> main <> [].
+	Theorem DivergesAt_divergent_not_empty:
+		forall divergent against n,
+			DivergesAt divergent against n -> divergent <> [].
 	Proof.
-		intros ? ? ? [_ HD]; apply Diverge_main_not_empty in HD; crush.
+		intros ? ? ? [_ HD]; apply Diverge_divergent_not_empty in HD; crush.
 	Qed.
 
 	Theorem TotalAlign_contradicts_DivergesAt:
-		forall main against n,
-			TotalAlign main against -> ~(DivergesAt main against n).
+		forall divergent against n,
+			TotalAlign divergent against -> ~(DivergesAt divergent against n).
 	Proof.
 		intros ? ? ? HA [_ HD];
 		apply (TotalAlign_skipn n) in HA;
 		apply (Diverge_contradicts_TotalAlign HD HA).
 	Qed.
 	Theorem DivergesAt_contradicts_TotalAlign:
-		forall main against n,
-			DivergesAt main against n -> ~(TotalAlign main against).
+		forall divergent against n,
+			DivergesAt divergent against n -> ~(TotalAlign divergent against).
 	Proof.
 		intros ? ? ? ? HA;
-		apply (contrapositive (@TotalAlign_contradicts_DivergesAt main against n HA)); crush.
+		apply (contrapositive (@TotalAlign_contradicts_DivergesAt divergent against n HA)); crush.
 	Qed.
 
 	Theorem FrontAlign_contradicts_DivergesAt:
-		forall main against n,
-			FrontAlign main against -> ~(DivergesAt main against n).
+		forall divergent against n,
+			FrontAlign divergent against -> ~(DivergesAt divergent against n).
 	Proof.
 		intros ? ? ? HA [_ HD];
 		apply (FrontAlign_skipn n) in HA;
 		apply (FrontAlign_contradicts_Diverge HA HD).
 	Qed.
 	Theorem DivergesAt_contradicts_FrontAlign:
-		forall main against n,
-			DivergesAt main against n -> ~(FrontAlign main against).
+		forall divergent against n,
+			DivergesAt divergent against n -> ~(FrontAlign divergent against).
 	Proof.
 		intros ? ? ? ? HA;
-		apply (contrapositive (@FrontAlign_contradicts_DivergesAt main against n HA)); crush.
+		apply (contrapositive (@FrontAlign_contradicts_DivergesAt divergent against n HA)); crush.
 	Qed.
 
 
@@ -412,7 +412,7 @@ Section ListAlignment.
 		forall bigger smaller,
 			Extends bigger smaller -> length smaller < length bigger.
 	Proof.
-		intros ? ? HD; apply (DivergesAt_main_longer HD).
+		intros ? ? HD; apply (DivergesAt_divergent_longer HD).
 	Qed.
 	(*
 		when Align is equality, Extends implies
@@ -420,26 +420,35 @@ Section ListAlignment.
 		/\ (skipn (length smaller) bigger) <> []
 	*)
 
-	Definition SomeAlignment main against n :=
-		DivergesAt main against n /\ n <> 0.
+	Definition SomeAlignment divergent against n :=
+		DivergesAt divergent against n /\ n <> 0.
 
 	Theorem SomeAlignment_against_not_empty:
-		forall main against n,
-			SomeAlignment main against n -> against <> [].
+		forall divergent against n,
+			SomeAlignment divergent against n -> against <> [].
 	Proof.
 		intros ? ? ? [[HA HD] ?];
-		destruct main; destruct against; destruct n;
+		destruct divergent; destruct against; destruct n;
 		inversion HD; inversion HA; crush.
 	Qed.
 
-	Definition NoAlignment main against :=
-		DivergesAt main against 0.
+	Definition NoAlignment divergent against :=
+		DivergesAt divergent against 0.
 
 	Theorem NoAlignment_equivalent_Diverge:
-		forall main against,
-			NoAlignment main against <-> Diverge main against.
+		forall divergent against,
+			NoAlignment divergent against <-> Diverge divergent against.
 	Proof.
 		unfold NoAlignment; unfold DivergesAt; crush.
 	Qed.
 
 End ListAlignment.
+
+
+Section ListEqualityAlignment.
+	Variable T U: Type.
+	Variable Align: T -> U -> Prop.
+
+	Definition Equality (a b: T) := a = b.
+
+End ListEqualityAlignment.

@@ -2,6 +2,7 @@ Add LoadPath "/home/blaine/lab/cpdtlib" as Cpdt.
 Set Implicit Arguments. Set Asymmetric Patterns.
 Require Import List Cpdt.CpdtTactics.
 Import ListNotations.
+Require Import PeanoNat.
 
 Notation "!" := (False_rect _ _).
 Notation "[ e ]" := (exist _ e _).
@@ -22,6 +23,8 @@ Ltac notHyp P :=
 
 Ltac solve_crush := try solve [crush].
 Ltac solve_assumption := try solve [assumption].
+Ltac subst_injection H :=
+	injection H; intros; subst; clear H.
 
 Ltac rewrite_trivial_firstn_skipn :=
 	try rewrite -> skipn_nil in *;
@@ -61,6 +64,34 @@ Theorem skipn_length_append:
 	forall T (l1 l2: list T), skipn (length l1) (l1 ++ l2) = l2.
 Proof.
 	intros; induction l1; crush.
+Qed.
+
+Theorem firstn_cons_nil:
+	forall (T: Type) n (a: T) l l', a :: l' = firstn n l -> l <> [].
+Proof.
+	intros; destruct l; rewrite_trivial_firstn_skipn; crush.
+Qed.
+
+Theorem skipn_cons_nil:
+	forall (T: Type) n (a: T) l l', a :: l' = skipn n l -> l <> [].
+Proof.
+	intros; destruct l; rewrite_trivial_firstn_skipn; crush.
+Qed.
+
+Theorem firstn_length_cons:
+	forall (T: Type) l (a: T),
+		0 < length l
+		-> firstn (length l) (a :: l) = a :: (firstn (length l - 1) l).
+Proof.
+	intros; destruct l; simpl in *;
+	try solve [inversion H]; rewrite -> Nat.sub_0_r; reflexivity.
+Qed.
+
+Theorem firstn_nil_cases:
+	forall (T: Type) n (l: list T), [] = firstn n l
+		-> n = 0 \/ l = [].
+Proof.
+	intros ? [] []; crush.
 Qed.
 
 Ltac add_append_length :=

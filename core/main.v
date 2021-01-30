@@ -55,131 +55,126 @@ Section Lookahead.
 		end.
 	Qed.
 
-	(*Definition EqualityDiverge (T: Type) := (@Diverge T T (fun a b => a = b)).*)
 	Definition PredictsAgainst lookahead main against :=
-		(*main <> []*)
-		(*-> exists rest, main = lookahead ++ rest*)
+		exists common divergent,
+		lookahead = common ++ divergent
+		/\ lookahead = firstn (length lookahead) main
+		/\ (
+			(EqDivergesAt lookahead against (length common))
+			\/ EqExtends against main
+			\/ EqTotalAlign against main
+		).
+
+	Definition PredictsAgainst_consequences :=
+		forall lookahead main against matched,
+			PredictsAgainst lookahead main against
+			-> (MatchFrontAlign main matched -> MatchFrontAlign lookahead matched)
+				/\ (
+					(MatchFrontAlign lookahead matched -> ~(MatchFrontAlign against matched))
+					\/ (MatchFrontAlign against matched -> MatchFrontAlign main matched)
+				).
+	  .
+
+		(*
+			there are three cases for a main/against:
+			1. they are exactly equivalent: EqTotalAlign against main
+			2. against extends main: EqExtends against main (lookahead = main)
+			3. main extends against: EqExtends main against (EqDivergesAt lookahead against)
+			4. they have a point of divergence: (EqDivergesAt lookahead against)
+
+			the definition of DivergesAt makes 3 and 4 equivalent, but they have different consequences regarding prediction
+			in 4, if lookahead (and therefore main) matches, then by construction against can't match since the tail of against doesn't align
+			but in 3, it instead means that main (and lookahead!) is itself a lookahead for against
+
+			or perhaps this is our situation for an inferred unless!!!
+			in situation 3, merely testing for *main* to match could erroneously cause us to move forward and parse a shorter sequence when the longer sequence could match, so rather than emitting a mere lookahead for main, we emit a *negative* lookahead for against (and a minimal lookahead to test if we should enter main)
+		*)
+
+	(*Definition PredictsAgainst lookahead main against :=
 		let n := (length lookahead) in
 		lookahead = (firstn n main)
 		/\ (
 			(0 < n /\ EqDivergesAt lookahead against (n - 1))
 			\/ EqExtends against main
 			\/ EqTotalAlign against main
-		).
+		).*)
 
 	Ltac lookahead_matches HL :=
 		try solve [rewrite -> HL; apply FrontAlign_firstn_front; assumption].
 
 	Theorem PredictsAgainst_correct_EqTotalAlign:
 		forall lookahead main against matched,
-			let n := (length lookahead) in
-			lookahead = (firstn n main)
+			lookahead = (firstn (length lookahead) main)
 			-> EqTotalAlign against main
 			-> (MatchFrontAlign main matched -> MatchFrontAlign lookahead matched)
 				/\ (MatchFrontAlign against matched -> MatchFrontAlign main matched).
 	Proof.
-		intros ? ? ? ? ? HL HEA; split; intros HFA; lookahead_matches HL;
+		intros ? ? ? ? HL HEA; split; intros HFA; lookahead_matches HL;
 		specialize (@Equivalent_FrontAlign against main matched HEA) as [H _];
 		apply H; assumption.
 	Qed.
 
 	Theorem PredictsAgainst_correct_EqExtends:
 		forall lookahead main against matched,
-			let n := (length lookahead) in
-			lookahead = (firstn n main)
+			lookahead = (firstn (length lookahead) main)
 			-> EqExtends against main
 			-> (MatchFrontAlign main matched -> MatchFrontAlign lookahead matched)
 				/\ (MatchFrontAlign against matched -> MatchFrontAlign main matched).
 	Proof.
-		intros ? ? ? ? ? HL [HA _]; split; intros HFA;
+		intros ? ? ? ? HL [HA _]; split; intros HFA;
 		rewrite firstn_all in *; lookahead_matches HL;
 		apply (Equivalent_FrontAlign _ HA);
 		apply (FrontAlign_firstn_front (length main) HFA).
 	Qed.
 
-	(*Theorem DivergesAt_Transfer:
-		forall n lookahead against matched,
-			MatchFrontAlign lookahead matched
-			-> MatchFrontAlign against matched
-			-> n < length lookahead
-			-> ~(EqDivergesAt lookahead against n).
-	Proof.
-intros ?; induction n; intros ? ?.
-
-intros ? HFAlm HFAam HL [HTA HD];
-do 2 rewrite -> skipn_O in *; do 2 rewrite -> firstn_O in *;
-inversion HD.
-
-inversion HFAlm; inversion HFAam; solve_crush; subst.
-clear HL.
-injection H3; intros; subst; clear H3.
-
-injection H8; injection H4; injection H9; intros; subst;
-clear H8; clear H4; clear H9; rename t into t1; rename u into t2; rename u0 into u; rename lt into lt1; rename lu into lt2; rename lu0 into lu.
-
-rewrite <- H0 in HL; simpl in HL; inversion HL.
-
-specialize (match_requires_equivalance H6 H2) as HE.
-apply H in HE; assumption.
-
-intros ? HFAlm HFAam HL [HTA HD].
-inversion HFAlm; inversion HFAam; solve_crush; subst.
-try solve [inversion HD].
-injection H6; intros; subst; clear H6.
-simpl in *.
-rename lt into lookahead.
-rename lt0 into against.
-rename lu into matched.
-apply lt_S_n in HL.
-apply (IHn lookahead against matched); solve_assumption.
-unfold EqDivergesAt; unfold DivergesAt; split; solve_assumption.
-inversion HTA; solve_assumption.
-	Qed.*)
-
-	Theorem firstn_cons_nil:
-		forall n (a: T) l l', a :: l' = firstn n l -> l <> [].
-	Proof.
-		intros; destruct l; rewrite_trivial_firstn_skipn; crush.
-	Qed.
-
-	Theorem skipn_cons_nil:
-		forall n (a: T) l l', a :: l' = skipn n l -> l <> [].
-	Proof.
-		intros; destruct l; rewrite_trivial_firstn_skipn; crush.
-	Qed.
-
-	Ltac subst_injection H :=
-		injection H; intros; subst; clear H.
-
-	Theorem firstn_length_cons:
-		forall l (a: T),
-			0 < length l
-			-> firstn (length l) (a :: l) = a :: (firstn (length l - 1) l).
-	Proof.
-		intros; destruct l; simpl in *;
-		try solve [inversion H]; rewrite -> Nat.sub_0_r; reflexivity.
-	Qed.
-
-	Theorem firstn_nil_cases:
-		forall n (l: list T), [] = firstn n l
-			-> n = 0 \/ l = [].
-	Proof.
-		intros [] []; crush.
-	Qed.
-
-
 	Theorem PredictsAgainst_correct_EqDivergesAt:
 		forall lookahead main against matched,
-			let n := (length lookahead) in
-			lookahead = (firstn n main)
-			-> 0 < n
-			-> EqDivergesAt lookahead against (n - 1)
+			(
+				exists common divergent,
+				lookahead = common ++ divergent
+				/\ lookahead = firstn (length lookahead) main
+				/\ (EqDivergesAt lookahead against (length common))
+			)
 			-> (MatchFrontAlign main matched -> MatchFrontAlign lookahead matched)
 				/\ (
 					(MatchFrontAlign lookahead matched -> ~(MatchFrontAlign against matched))
 					\/ (MatchFrontAlign against matched -> MatchFrontAlign main matched)
 				).
 	Proof.
+intros ? ? ? ? [common [divergent [HLCD [HL [HTA HD]]]]];
+split; lookahead_matches HL.
+
+rewrite -> HLCD in HTA;
+rewrite -> HLCD in HD;
+rewrite -> skipn_length_append in *;
+rewrite -> firstn_length_append in *.
+destruct common as [| c common'];
+destruct divergent as [| d divergent'];
+destruct against as [| a against'];
+rewrite_trivial_firstn_skipn;
+try rewrite -> app_nil_l in *;
+try solve [inversion HD];
+try solve [inversion HTA].
+
+
+
+
+left; intros HFAlm; intros HFAam;
+rewrite -> HLCD in *.
+inversion HFAlm; inversion HFAam; crush.
+
+
+
+destruct (skipn (length common) against) as [| a against'].
+rewrite -> HLCD in HFAlm.
+inversion HD; inversion HFAlm; inversion HFAam; crush.
+
+destruct divergent as [| d divergent'];
+try solve [inversion HD].
+
+
+
+
 (*intros ? ?; generalize dependent lookahead;
 induction main as [| m main']; intros ? ? ? ? HL Hn [HTA HD];*)
 
@@ -392,6 +387,47 @@ simpl.
 	*)
 
 End Lookahead.
+
+
+(*Theorem DivergesAt_Transfer:
+		forall n lookahead against matched,
+			MatchFrontAlign lookahead matched
+			-> MatchFrontAlign against matched
+			-> n < length lookahead
+			-> ~(EqDivergesAt lookahead against n).
+	Proof.
+intros ?; induction n; intros ? ?.
+
+intros ? HFAlm HFAam HL [HTA HD];
+do 2 rewrite -> skipn_O in *; do 2 rewrite -> firstn_O in *;
+inversion HD.
+
+inversion HFAlm; inversion HFAam; solve_crush; subst.
+clear HL.
+injection H3; intros; subst; clear H3.
+
+injection H8; injection H4; injection H9; intros; subst;
+clear H8; clear H4; clear H9; rename t into t1; rename u into t2; rename u0 into u; rename lt into lt1; rename lu into lt2; rename lu0 into lu.
+
+rewrite <- H0 in HL; simpl in HL; inversion HL.
+
+specialize (match_requires_equivalance H6 H2) as HE.
+apply H in HE; assumption.
+
+intros ? HFAlm HFAam HL [HTA HD].
+inversion HFAlm; inversion HFAam; solve_crush; subst.
+try solve [inversion HD].
+injection H6; intros; subst; clear H6.
+simpl in *.
+rename lt into lookahead.
+rename lt0 into against.
+rename lu into matched.
+apply lt_S_n in HL.
+apply (IHn lookahead against matched); solve_assumption.
+unfold EqDivergesAt; unfold DivergesAt; split; solve_assumption.
+inversion HTA; solve_assumption.
+	Qed.*)
+
 
 
 (*Theorem Equivalent_TotalAlign:
