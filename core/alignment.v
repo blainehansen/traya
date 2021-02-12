@@ -235,14 +235,14 @@ Section ListAlignment.
 		assumption.
 	Qed.
 
-	Theorem TotalAlign_shorter:
-		forall bigger smaller extension align,
-			bigger = smaller ++ extension
-			-> TotalAlign bigger align
-			-> TotalAlign smaller (firstn (length smaller) align).
+	Theorem TotalAlign_extension:
+		forall extending extended rest aligned,
+			extending = extended ++ rest
+			-> TotalAlign extending aligned
+			-> TotalAlign extended (firstn (length extended) aligned).
 	Proof.
 		intros ? ? ? ? ? HC; subst;
-		apply (TotalAlign_firstn (length smaller)) in HC;
+		apply (TotalAlign_firstn (length extended)) in HC;
 		rewrite -> firstn_length_append in HC; assumption.
 	Qed.
 
@@ -290,23 +290,23 @@ Section ListAlignment.
 		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
 	Qed.
 
-	Theorem FrontAlign_shorter:
-		forall bigger smaller extension aligned,
-			bigger = smaller ++ extension
-			-> FrontAlign bigger aligned
-			-> FrontAlign smaller aligned.
+	Theorem FrontAlign_extension:
+		forall extending extended rest aligned,
+			extending = extended ++ rest
+			-> FrontAlign extending aligned
+			-> FrontAlign extended aligned.
 	Proof.
 		intros ? ? ? ? ? HM; subst; generalize dependent aligned;
-		induction smaller; intros; destruct aligned; inversion HM; crush.
+		induction extended; intros; destruct aligned; inversion HM; crush.
 	Qed.
-	Theorem FrontAlign_shorter_contrapositive:
-		forall bigger smaller extension aligned,
-			bigger = smaller ++ extension
-			-> ~(FrontAlign smaller aligned)
-			-> ~(FrontAlign bigger aligned).
+	Theorem FrontAlign_extension_contrapositive:
+		forall extending extended rest aligned,
+			extending = extended ++ rest
+			-> ~(FrontAlign extended aligned)
+			-> ~(FrontAlign extending aligned).
 	Proof.
 		intros ? ? ? ? Hb ?;
-		apply (contrapositive (@FrontAlign_shorter bigger smaller _ _ Hb));
+		apply (contrapositive (@FrontAlign_extension extending extended _ _ Hb));
 		assumption.
 	Qed.
 
@@ -452,3 +452,29 @@ Section ListEqualityAlignment.
 	Definition Equality (a b: T) := a = b.
 
 End ListEqualityAlignment.
+
+
+(*
+Section FoldsAlignment.
+	Variable T U: Type.
+	Variable Align: T -> list U -> Prop.
+
+	(* definition of FoldsAlign *)
+	Inductive FoldsAlign: list T -> list U -> Prop :=
+		| FoldsAlign_nil: FoldsAlign (@nil T) (@nil U)
+		| FoldsAlign_cons: forall (t: T) (us: list U) lt lu,
+			Align t us -> FoldsAlign lt lu -> FoldsAlign (t :: lt) (us ++ lu)
+	.
+	Hint Constructors FoldsAlign: core.
+
+
+	(* definition of FoldsMatch *)
+	Inductive FoldsMatch: list T -> list U -> Prop :=
+		| FoldsMatch_nil: forall lu, FoldsMatch (@nil T) lu
+		| FoldsMatch_cons: forall (t: T) (us: list U) lt lu,
+			Align t us -> FoldsMatch lt lu -> FoldsMatch (t :: lt) (us ++ lu)
+	.
+	Hint Constructors FoldsMatch: core.
+
+End FoldsAlignment.
+*)

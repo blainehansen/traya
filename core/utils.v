@@ -26,12 +26,6 @@ Ltac solve_assumption := try solve [assumption].
 Ltac subst_injection H :=
 	injection H; intros; subst; clear H.
 
-Ltac rewrite_trivial_firstn_skipn :=
-	try rewrite -> skipn_nil in *;
-	try rewrite -> firstn_nil in *;
-	try rewrite -> skipn_O in *;
-	try rewrite -> firstn_O in *.
-
 Theorem skipn_n_smaller_not_nil:
 	forall T n (l: list T), n < length l -> skipn n l <> [].
 Proof.
@@ -54,7 +48,6 @@ Proof.
 	intros; induction la; crush.
 Qed.
 
-
 Theorem firstn_length_append:
 	forall T (l1 l2: list T), firstn (length l1) (l1 ++ l2) = l1.
 Proof.
@@ -66,17 +59,15 @@ Proof.
 	intros; induction l1; crush.
 Qed.
 
-Theorem firstn_cons_nil:
-	forall (T: Type) n (a: T) l l', a :: l' = firstn n l -> l <> [].
-Proof.
-	intros; destruct l; rewrite_trivial_firstn_skipn; crush.
-Qed.
-
-Theorem skipn_cons_nil:
-	forall (T: Type) n (a: T) l l', a :: l' = skipn n l -> l <> [].
-Proof.
-	intros; destruct l; rewrite_trivial_firstn_skipn; crush.
-Qed.
+Ltac rewrite_trivial_firstn_skipn :=
+	try rewrite -> firstn_nil in *;
+	try rewrite -> skipn_nil in *;
+	try rewrite -> firstn_O in *;
+	try rewrite -> skipn_O in *;
+	try rewrite -> firstn_length_append in *;
+	try rewrite -> skipn_length_append in *;
+	try rewrite -> firstn_all in *;
+	try rewrite -> skipn_all in *.
 
 Theorem firstn_length_cons:
 	forall (T: Type) l (a: T),
@@ -92,6 +83,18 @@ Theorem firstn_nil_cases:
 		-> n = 0 \/ l = [].
 Proof.
 	intros ? [] []; crush.
+Qed.
+
+Theorem firstn_cons_nil:
+	forall (T: Type) n (a: T) l l', a :: l' = firstn n l -> l <> [].
+Proof.
+	intros; destruct l; rewrite_trivial_firstn_skipn; crush.
+Qed.
+
+Theorem skipn_cons_nil:
+	forall (T: Type) n (a: T) l l', a :: l' = skipn n l -> l <> [].
+Proof.
+	intros; destruct l; rewrite_trivial_firstn_skipn; crush.
 Qed.
 
 Ltac add_append_length :=
