@@ -5,6 +5,7 @@ Import ListNotations.
 Open Scope list_scope.
 Require Import Cpdt.CpdtTactics.
 Require Import PeanoNat Lt.
+Require Import micromega.Lia.
 
 Require Import core.utils.
 
@@ -64,22 +65,19 @@ Section ListAlignment.
 	.
 
 	(* properties of Diverge *)
-	Theorem Diverge_divergent_not_empty:
-		forall lt lu, Diverge lt lu -> lt <> [].
+	Theorem Diverge_divergent_not_empty lt lu: Diverge lt lu -> lt <> [].
 	Proof.
-		intros ? ? HD; inversion HD; crush.
+		inversion 1; crush.
 	Qed.
 
-	Theorem Diverge_head_not_align:
-		forall lt lu, Diverge lt lu
+	Theorem Diverge_head_not_align lt lu:
+		Diverge lt lu
 			-> lu = []
 				\/ exists (Hlt: 0 < length lt) (Hlu: 0 < length lu),
 					~(Align (safe_nth lt Hlt) (safe_nth lu Hlu)).
 	Proof.
-		intros ? ? HD; inversion HD as [| ? ? lt' lu'];
-		try solve [left; reflexivity]; right;
-		exists (Nat.lt_0_succ (length lt')); exists (Nat.lt_0_succ (length lu'));
-		assumption.
+		inversion 1 as [| ?? lt' lu'];
+		unshelve eauto using Nat.lt_0_succ; crush.
 	Qed.
 
 
@@ -92,22 +90,22 @@ Section ListAlignment.
 	Hint Constructors TotalAlign: core.
 
 	(* properties of TotalAlign *)
-	Theorem TotalAlign_contradicts_Diverge:
-		forall lt lu, TotalAlign lt lu -> ~(Diverge lt lu).
+	Theorem TotalAlign_contradicts_Diverge lt lu:
+		TotalAlign lt lu -> ~(Diverge lt lu).
 	Proof.
-		intros ? ? HA HD; inversion HA; inversion HD; crush.
+		inversion 1; inversion 1; crush.
 	Qed.
-	Theorem Diverge_contradicts_TotalAlign:
-		forall lt lu, Diverge lt lu -> ~(TotalAlign lt lu).
+	Theorem Diverge_contradicts_TotalAlign lt lu:
+		Diverge lt lu -> ~(TotalAlign lt lu).
 	Proof.
-		intros ? ? ? HA;
+		intros ? HA;
 		apply (contrapositive (TotalAlign_contradicts_Diverge HA)); crush.
 	Qed.
 
-	Theorem TotalAlign_same_length:
-		forall lt lu, TotalAlign lt lu -> length lt = length lu.
+	Theorem TotalAlign_same_length lt lu:
+		TotalAlign lt lu -> length lt = length lu.
 	Proof.
-		intros ? ? H; induction H; crush.
+		induction 1; crush.
 	Qed.
 
 	Ltac remember_TotalAlign :=
@@ -124,24 +122,22 @@ Section ListAlignment.
 			|| specialize (TotalAlign_same_length H) as ?
 		end.
 
-	Theorem TotalAlign_append:
-		forall lt_one lu_one lt_two lu_two,
-			TotalAlign lt_one lu_one
-			-> TotalAlign lt_two lu_two
-			-> TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two).
+	Theorem TotalAlign_append lt_one lu_one lt_two lu_two:
+		TotalAlign lt_one lu_one
+		-> TotalAlign lt_two lu_two
+		-> TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two).
 	Proof.
 		Hint Rewrite -> app_nil_r.
-		intros ? ? ? ? H_one H_two; induction H_one; induction H_two; crush.
+		induction 1; induction 1; crush.
 	Qed.
 
-	Theorem TotalAlign_nth_C:
-		forall n lt lu,
-			TotalAlign lt lu
-			-> n < length lt \/ n < length lu
-			-> exists (Hlt: n < length lt) (Hlu: n < length lu),
-				Align (safe_nth lt Hlt) (safe_nth lu Hlu).
+	Theorem TotalAlign_nth_C n lt lu:
+		TotalAlign lt lu
+		-> n < length lt \/ n < length lu
+		-> exists (Hlt: n < length lt) (Hlu: n < length lu),
+			Align (safe_nth lt Hlt) (safe_nth lu Hlu).
 	Proof.
-		intros ? ? ? HC [Hlt | Hlu];
+		intros HC [Hlt | Hlu];
 		add_TotalAlign_same_length;
 		match goal with
 		| HC: TotalAlign ?lt ?lu, HL: length ?lt = length ?lu |- _ =>
@@ -153,14 +149,12 @@ Section ListAlignment.
 			end
 		end;
 		exists Hlt; exists Hlu;
-		generalize dependent lu; generalize dependent lt;
-		induction n; intros; destruct lt; destruct lu; inversion HC; crush.
+		induction n; destruct lt, lu; inversion HC; crush.
 	Qed.
 
-	Theorem TotalAlign_split_lengths:
-		forall lt_one lu_one lt_two lu_two,
-			TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two)
-			-> length lt_one = length lu_one <-> length lt_two = length lu_two.
+	Theorem TotalAlign_split_lengths lt_one lu_one lt_two lu_two:
+		TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two)
+		-> length lt_one = length lu_one <-> length lt_two = length lu_two.
 	Proof.
 		intros; remember_TotalAlign;
 		add_TotalAlign_same_length; add_append_length; crush.
@@ -190,35 +184,32 @@ Section ListAlignment.
 			| H: TotalAlign (?t :: ?lt) [] |- _ => solve [inversion H]
 		end.
 
-	Theorem TotalAlign_firstn:
-		forall n lt lu, TotalAlign lt lu
-			-> TotalAlign (firstn n lt) (firstn n lu).
+	Theorem TotalAlign_firstn n lt lu:
+		TotalAlign lt lu
+		-> TotalAlign (firstn n lt) (firstn n lu).
 	Proof.
-		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
+		intros HA; generalize dependent n; induction HA; intros []; crush.
 	Qed.
-	Theorem TotalAlign_skipn:
-		forall n lt lu, TotalAlign lt lu
+	Theorem TotalAlign_skipn n lt lu:
+		TotalAlign lt lu
 			-> TotalAlign (skipn n lt) (skipn n lu).
 	Proof.
-		intros ? ? ? HA; generalize dependent n; induction HA; intros []; crush.
+		intros HA; generalize dependent n; induction HA; intros []; crush.
 	Qed.
-	Theorem TotalAlign_split:
-		forall n lt lu, TotalAlign lt lu
+	Theorem TotalAlign_split n lt lu:
+		TotalAlign lt lu
 			-> TotalAlign (firstn n lt) (firstn n lu)
 				/\ TotalAlign (skipn n lt) (skipn n lu).
 	Proof.
-		intros ? ? ? H; split;
-		try apply (TotalAlign_firstn n H);
-		try apply (TotalAlign_skipn n H).
+		eauto using TotalAlign_firstn, TotalAlign_skipn.
 	Qed.
 
-	Theorem TotalAlign_append_split:
-		forall lt_one lu_one lt_two lu_two,
-			TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two)
-			-> length lt_one = length lu_one \/ length lt_two = length lu_two
-			-> TotalAlign lt_one lu_one /\ TotalAlign lt_two lu_two.
+	Theorem TotalAlign_append_split lt_one lu_one lt_two lu_two:
+		TotalAlign (lt_one ++ lt_two) (lu_one ++ lu_two)
+		-> length lt_one = length lu_one \/ length lt_two = length lu_two
+		-> TotalAlign lt_one lu_one /\ TotalAlign lt_two lu_two.
 	Proof.
-		intros ? ? ? ? HA [HL | HL]; split;
+		intros HA [HL | HL]; split;
 		specialize (TotalAlign_firstn (length lt_one) HA) as H1;
 		specialize (TotalAlign_skipn (length lt_one) HA) as H2;
 		try match goal with
@@ -235,13 +226,12 @@ Section ListAlignment.
 		assumption.
 	Qed.
 
-	Theorem TotalAlign_extension:
-		forall extending extended rest aligned,
-			extending = extended ++ rest
-			-> TotalAlign extending aligned
-			-> TotalAlign extended (firstn (length extended) aligned).
+	Theorem TotalAlign_extension extending extended rest aligned:
+		extending = extended ++ rest
+		-> TotalAlign extending aligned
+		-> TotalAlign extended (firstn (length extended) aligned).
 	Proof.
-		intros ? ? ? ? ? HC; subst;
+		intros ? HC; subst;
 		apply (TotalAlign_firstn (length extended)) in HC;
 		rewrite -> firstn_length_append in HC; assumption.
 	Qed.
